@@ -1,0 +1,40 @@
+# Secrets
+.env
+.arena-credentials
+.arena-poker-state
+.arena-poker-state.tmp
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# venv / uv
+.venv/
+venv/
+.uv/
+uv.lock
+
+# Tests
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Claude / OMC session artifacts
+.omc/
+.claude/
+.aider*

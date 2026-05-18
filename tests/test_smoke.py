@@ -1,0 +1,360 @@
+"""End-to-end smoke test using respx to mock the Arena endpoints under
+the new contract (pending-actions primary, benchmark/status for terminal).
+
+Validates that examples/agent.py:
+- registers exactly once (idempotent on rerun, verified via /agent/me)
+- calls /__introspection at startup
+- starts a benchmark match
+- polls /texas/pending-actions and calls decide() on returned tables
+- submits an action body with a valid `reasoning` YAML
+- exits cleanly when match phase is terminal (from introspection enum)
+- in --dry-run, only hits the mock base URL (never the real arena)
+"""
+from __future__ import annotations
+
+import json
+import re
+import sys
+from pathlib import Path
+
+import httpx
+import pytest
+import respx
+
+# Make examples/ importable when running pytest from the repo root.
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "examples"))
+
+import agent as agent_mod  # noqa: E402
+
+
+MOCK_BASE = "http://mock.local/api/arena"
+
+
+def _introspection_payload() -> dict:
+    return {
+        "endpoints": [
+            {"method": "POST", "path": "/api/arena/auth/register", "auth": False},
+            {"method": "GET",  "path": "/api/arena/agent/me", "auth": True},
+            {"method": "GET",  "path": "/api/arena/__introspection", "auth": True},
+            {"method": "POST", "path": "/api/arena/texas/benchmark/start", "auth": True,
+             "output": {
+                 "properties": {
+                     "match": {
+                         "properties": {
+                             "phase": {"enum": ["queued", "panel_acting",
+                                                "waiting_user", "completed",
+                                                "cancelled", "failed"]},
+                             "status": {"enum": ["Running", "Completed",
+                                                 "Cancelled", "Failed"]},
+                         }
+                     }
+                 }
+             }},
+            {"method": "GET",  "path": "/api/arena/texas/benchmark/status", "auth": True},
+            {"method": "GET",  "path": "/api/arena/texas/pending-actions", "auth": True},
+            {"method": "POST", "path": "/api/arena/texas/action", "auth": True},
+        ]
+    }
+
+
+def _table_state(deadline_at: float) -> dict:
+    """Synthetic table where hero must act on the flop."""
+    return {
+        "id": "tbl_1",
+        "tableId": "tbl_1",
+        "tableNumber": 1,
+        "competitionId": "comp_test",
+        "status": "Active",
+        "street": "Flop",
+        "potChips": 300,
+        "currentBet": 100,
+        "minRaiseTo": 200,
+        "startedAt": 1700000000000,
+        "endedAt": None,
+        "countdownEndsAt": None,
+        "actionDeadlineAt": int(deadline_at * 1000),
+        "currentSeatNumber": 1,
+        "boardCards": ["Ah", "Kd", "7c"],
+        "smallBlindChips": 10,
+        "bigBlindChips": 20,
+        "buyInChips": 2000,
+        "winners": [],
+        "seats": [
+            {
+                "seatId": "s1", "seatNumber": 1, "agentId": "me",
+                "agentName": "Me", "agentHandle": "me", "status": "Active",
+                "stackChips": 1800, "currentBetChips": 0,
+                "totalCommittedChips": 0, "payoutChips": None,
+                "holeCards": ["As", "Ks"],
+            },
+            {
+                "seatId": "s2", "seatNumber": 2, "agentId": "opp",
+                "agentName": "Opp", "agentHandle": "opp", "status": "Active",
+                "stackChips": 1700, "currentBetChips": 100,
+                "totalCommittedChips": 100, "payoutChips": None,
+                "holeCards": None,
+            },
+        ],
+        "actingSeatNumber": 1,
+        "selfSeatNumber": 1,
+        "allowedActions": {
+            "canFold": True, "canCheck": False, "canCall": True,
+            "canBet": False, "canRaise": True,
+            "callAmount": 100, "callChips": 100, "callToAmount": 100,
+            "minBet": None, "minRaiseTo": 200, "maxCommit": 1800,
+            "allInToAmount": 1800,
+            "betRange": None,
+            "raiseRange": {"min": 200, "max": 1800},
+            "canAllIn": True,
+            "availableActions": ["fold", "call", "raise", "all-in"],
+            "amountSemantics": "toAmount",
+            "amountHint": "total committed this street",
+            "actionHint": "fold/call/raise to >= 200 / all-in 1800",
+        },
+        "recentEvents": [],
+    }
+
+
+@pytest.fixture(autouse=True)
+def _clean_state(tmp_path, monkeypatch):
+    """Move CWD into a temp dir so .arena-credentials and .arena-poker-state
+    don't pollute the repo."""
+    monkeypatch.chdir(tmp_path)
+    yield
+
+
+def _reasoning_is_valid(reasoning: str) -> bool:
+    """YAML flow style under 150 chars, contains at least vr/ke/pp."""
+    if not reasoning:
+        return False
+    if len(reasoning) > 150:
+        return False
+    if not (reasoning.startswith("{") and reasoning.endswith("}")):
+        return False
+    for key in ("vr:", "ke:", "pp:"):
+        if key not in reasoning:
+            return False
+    return True
+
+
+def _start_payload(phase: str = "queued") -> dict:
+    return {
+        "match": {
+            "id": "m1", "competitionId": "comp_test", "agentId": "agent_test",
+            "status": "Running" if phase != "completed" else "Completed",
+            "phase": phase,
+            "targetHands": 10, "completedHands": 0,
+            "rawChipDelta": 0, "rawBbPer100": 0.0,
+            "adjustedChipDelta": None, "adjustedBbPer100": None,
+            "currentTableId": None, "startedAt": 1700000000000,
+            "endedAt": None, "error": None,
+        },
+        "table": None,
+        "participant": None,
+    }
+
+
+def _completed_status() -> httpx.Response:
+    return httpx.Response(200, json={
+        "match": {
+            "id": "m1", "competitionId": "comp_test", "agentId": "agent_test",
+            "status": "Completed", "phase": "completed",
+            "targetHands": 10, "completedHands": 10,
+            "rawChipDelta": 250, "rawBbPer100": 12.5,
+            "adjustedChipDelta": 200.0, "adjustedBbPer100": 10.0,
+            "currentTableId": None, "startedAt": 1700000000000,
+            "endedAt": 1700000010000, "error": None,
+        },
+        "table": None,
+        "participant": None,
+    })
+
+
+@respx.mock
+def test_full_dry_run_happy_path():
+    register_route = respx.post(f"{MOCK_BASE}/auth/register").mock(
+        return_value=httpx.Response(200, json={
+            "agentId": "agent_test", "apiKey": "test_key_xxx",
+            "handle": "pokerkit-starter", "name": "PokerKit Starter",
+        })
+    )
+    me_route = respx.get(f"{MOCK_BASE}/agent/me").mock(
+        return_value=httpx.Response(200, json={
+            "id": "agent_test", "handle": "pokerkit-starter",
+        })
+    )
+    introspection_route = respx.get(f"{MOCK_BASE}/__introspection").mock(
+        return_value=httpx.Response(200, json=_introspection_payload())
+    )
+
+    start_route = respx.post(f"{MOCK_BASE}/texas/benchmark/start").mock(
+        return_value=httpx.Response(200, json=_start_payload("queued"))
+    )
+
+    import time as _time
+    deadline = _time.time() + 10.0
+    table_state = _table_state(deadline)
+
+    # pending-actions: returns the table on first call, then empty.
+    pending_responses = [
+        httpx.Response(200, json={"tables": [table_state]}),
+        httpx.Response(200, json={"tables": []}),
+        httpx.Response(200, json={"tables": []}),
+    ]
+    pending_route = respx.get(re.compile(
+        re.escape(f"{MOCK_BASE}/texas/pending-actions") + r"\?.*"
+    )).mock(side_effect=pending_responses)
+
+    # status: queued → completed (after the action lands).
+    status_responses = [
+        httpx.Response(200, json=_start_payload("queued")),
+        _completed_status(),
+        _completed_status(),
+    ]
+    status_route = respx.get(re.compile(
+        re.escape(f"{MOCK_BASE}/texas/benchmark/status") + r"\?.*"
+    )).mock(side_effect=status_responses)
+
+    action_route = respx.post(f"{MOCK_BASE}/texas/action").mock(
+        return_value=httpx.Response(200, json={
+            "table": table_state, "participant": None,
+        })
+    )
+
+    rc = agent_mod.main(["--dry-run", "--competition-id", "comp_test",
+                         "--max-hands", "0"])
+    assert rc == 0, f"agent main returned {rc}"
+
+    assert register_route.call_count == 1, f"register called {register_route.call_count} times"
+    # /agent/me only called when cached creds exist — first run does not.
+    assert me_route.call_count == 0
+    assert introspection_route.call_count == 1
+    assert start_route.call_count == 1
+    assert pending_route.call_count >= 1
+    assert status_route.call_count >= 1
+    assert action_route.call_count == 1, f"action called {action_route.call_count} times"
+
+    body = json.loads(action_route.calls[0].request.content)
+    assert body["tableId"] == "tbl_1"
+    assert body["action"] in ("fold", "call", "raise", "all-in"), body
+    assert "reasoning" in body and _reasoning_is_valid(body["reasoning"]), body
+    assert "message" in body and 1 <= len(body["message"]) <= 500
+
+
+@respx.mock
+def test_registration_idempotent_on_rerun():
+    """If .arena-credentials already exists, /auth/register must NOT be
+    called when /agent/me confirms the cached key is valid."""
+    Path(".arena-credentials").write_text(json.dumps({
+        "agentId": "cached_agent", "apiKey": "cached_key",
+    }))
+
+    register_route = respx.post(f"{MOCK_BASE}/auth/register").mock(
+        return_value=httpx.Response(200, json={"agentId": "should_not_be_called"})
+    )
+    me_route = respx.get(f"{MOCK_BASE}/agent/me").mock(
+        return_value=httpx.Response(200, json={
+            "id": "cached_agent", "handle": "cached",
+        })
+    )
+    respx.get(f"{MOCK_BASE}/__introspection").mock(
+        return_value=httpx.Response(200, json=_introspection_payload())
+    )
+    respx.post(f"{MOCK_BASE}/texas/benchmark/start").mock(
+        return_value=httpx.Response(200, json={
+            "match": {
+                "id": "m2", "competitionId": "c", "agentId": "cached_agent",
+                "status": "Completed", "phase": "completed",
+                "targetHands": 1, "completedHands": 1,
+                "rawChipDelta": 0, "rawBbPer100": 0.0,
+                "adjustedChipDelta": 0.0, "adjustedBbPer100": 0.0,
+                "currentTableId": None, "startedAt": 1, "endedAt": 2, "error": None,
+            },
+            "table": None, "participant": None,
+        })
+    )
+    respx.get(re.compile(
+        re.escape(f"{MOCK_BASE}/texas/pending-actions") + r"\?.*"
+    )).mock(return_value=httpx.Response(200, json={"tables": []}))
+    respx.get(re.compile(
+        re.escape(f"{MOCK_BASE}/texas/benchmark/status") + r"\?.*"
+    )).mock(return_value=httpx.Response(200, json={
+        "match": {
+            "id": "m2", "competitionId": "c", "agentId": "cached_agent",
+            "status": "Completed", "phase": "completed",
+            "targetHands": 1, "completedHands": 1,
+            "rawChipDelta": 0, "rawBbPer100": 0.0,
+            "adjustedChipDelta": 0.0, "adjustedBbPer100": 0.0,
+            "currentTableId": None, "startedAt": 1, "endedAt": 2, "error": None,
+        },
+        "table": None, "participant": None,
+    }))
+
+    rc = agent_mod.main(["--dry-run", "--competition-id", "c"])
+    assert rc == 0
+    assert register_route.call_count == 0, "registration should be cached"
+    assert me_route.call_count == 1, "cached creds must be verified with /agent/me"
+
+
+@respx.mock
+def test_dry_run_does_not_hit_production():
+    """Any call to b-arena.dev.fun must NOT be mocked here — confirm dry-run
+    only touches the mock base URL."""
+    Path(".arena-credentials").write_text(json.dumps({
+        "agentId": "x", "apiKey": "y",
+    }))
+    leak = respx.route(host="b-arena.dev.fun").mock(
+        return_value=httpx.Response(599)
+    )
+
+    respx.get(f"{MOCK_BASE}/agent/me").mock(
+        return_value=httpx.Response(200, json={"id": "x"})
+    )
+    respx.get(f"{MOCK_BASE}/__introspection").mock(
+        return_value=httpx.Response(200, json=_introspection_payload())
+    )
+    respx.post(f"{MOCK_BASE}/texas/benchmark/start").mock(
+        return_value=httpx.Response(200, json={
+            "match": {
+                "id": "m3", "competitionId": "c", "agentId": "x",
+                "status": "Completed", "phase": "completed",
+                "targetHands": 0, "completedHands": 0,
+                "rawChipDelta": 0, "rawBbPer100": 0.0,
+                "adjustedChipDelta": 0.0, "adjustedBbPer100": 0.0,
+                "currentTableId": None, "startedAt": 1, "endedAt": 2, "error": None,
+            },
+            "table": None, "participant": None,
+        })
+    )
+    respx.get(re.compile(
+        re.escape(f"{MOCK_BASE}/texas/pending-actions") + r"\?.*"
+    )).mock(return_value=httpx.Response(200, json={"tables": []}))
+    respx.get(re.compile(
+        re.escape(f"{MOCK_BASE}/texas/benchmark/status") + r"\?.*"
+    )).mock(return_value=httpx.Response(200, json={
+        "match": {
+            "id": "m3", "competitionId": "c", "agentId": "x",
+            "status": "Completed", "phase": "completed",
+            "targetHands": 0, "completedHands": 0,
+            "rawChipDelta": 0, "rawBbPer100": 0.0,
+            "adjustedChipDelta": 0.0, "adjustedBbPer100": 0.0,
+            "currentTableId": None, "startedAt": 1, "endedAt": 2, "error": None,
+        },
+        "table": None, "participant": None,
+    }))
+
+    rc = agent_mod.main(["--dry-run", "--competition-id", "c"])
+    assert rc == 0
+    assert leak.call_count == 0, "dry-run leaked to production"
+
+
+def test_introspection_missing_endpoints_fails_loud():
+    """If introspection is missing a required endpoint, we must SystemExit
+    rather than continuing on a moved API."""
+    schema = {"endpoints": [
+        {"method": "POST", "path": "/api/arena/auth/register", "auth": False},
+    ]}
+    with pytest.raises(SystemExit) as exc:
+        agent_mod.assert_endpoints(schema)
+    assert "missing endpoint" in str(exc.value)

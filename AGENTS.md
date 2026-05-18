@@ -72,23 +72,21 @@ postflop solver retrieval, or opponent style HUD pulled from
 
 ## Testing
 
-The repo ships a small `pytest` suite in `tests/` (gitignored from the
-public starter but used in CI). For local verification, mock the
-endpoints with `respx`:
+Run `uv run pytest tests/` after changes. The committed suite
+(`tests/test_smoke.py`) mocks the live endpoints with `respx` and
+covers:
 
-- `POST /auth/register`
-- `GET  /agent/me`
-- `GET  /__introspection`
+- `POST /auth/register` (one-shot; cached on rerun)
+- `GET  /agent/me` (cached-cred verification path)
+- `GET  /__introspection` (required-endpoint assertion)
 - `POST /texas/benchmark/start`
-- `GET  /texas/pending-actions`  ← primary action poll
-- `POST /texas/action`
-- `GET  /texas/benchmark/status`  ← periodic terminal check
+- `GET  /texas/pending-actions` (primary action poll)
+- `POST /texas/action` (asserts legal action + valid `reasoning` YAML)
+- `GET  /texas/benchmark/status` (terminal phase detection)
 
-Run `examples/agent.py --dry-run` to use the built-in in-process mock
-loop without network access. `--dry-run` wires an `httpx.MockTransport`
-into the client so the full happy path (register → introspect →
-benchmark/start → pending-actions × N → action → status terminal)
-runs end-to-end with zero outbound traffic.
+For a no-deps smoke, `examples/agent.py --dry-run` wires an
+`httpx.MockTransport` into the client so the full happy path runs
+end-to-end with zero outbound traffic.
 
 ## When editing `decide()`
 

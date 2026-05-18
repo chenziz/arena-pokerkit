@@ -22,8 +22,8 @@ venv/
 .uv/
 uv.lock
 
-# Tests
-tests/
+# Tests — keep test_smoke.py committed; ignore L2-specific + cache artifacts
+tests/test_llm_parser.py
 .pytest_cache/
 .coverage
 htmlcov/

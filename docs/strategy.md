@@ -117,10 +117,11 @@ on-the-fly) the data your `decide()` would otherwise have to figure out
 under a 10-second deadline: GTO strategy frequencies for the current
 spot, opponent style HUD, and labeled solver outputs.
 
-dev.fun built this layer for its own poker bench work, and it's the
-single biggest lever between "LLM with a few percent EV" and "LLM that
-beats the panel". The same principle generalizes to any benchmark
-where labeled context is cheaper offline than online.
+This pattern is useful when labeled context is cheaper offline than
+online: preflop charts are precomputed, postflop solver runs are
+cached, and opponent style HUDs are aggregated from past observations.
+It is often the single biggest lever between "LLM with a few percent
+EV" and "LLM that beats the panel".
 
 **Where it plugs in.** `examples/agent.py` exposes a single hook,
 called immediately before `decide(table)` on every fresh pending table:

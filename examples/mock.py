@@ -14,8 +14,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import random
-import time
 from typing import Any, Optional
 
 import httpx
@@ -27,16 +25,11 @@ from arena_client import (
     assert_endpoints,
     fetch_introspection,
     load_or_register,
-    load_state,
     resolve_terminal_phases,
-    save_state,
 )
 
 
 MOCK_COMPETITION_ID = "comp_dryrun"
-POLL_INTERVAL = 1.0
-POLL_JITTER = 0.3
-STATUS_REFRESH_S = 8.0
 
 
 def respx_active() -> bool:
@@ -254,7 +247,6 @@ def run_mock_benchmark(args: argparse.Namespace,
         client._client.close()
         client._client = httpx.Client(transport=httpx.MockTransport(_handler),
                                       timeout=10.0, trust_env=False)
-    state = load_state()
 
     try:
         creds = load_or_register(client, args.handle, args.name, args.quote)
@@ -273,79 +265,26 @@ def run_mock_benchmark(args: argparse.Namespace,
         print(f"[arena-pokerkit] (dry-run) benchmark started: phase={match.get('phase')} "
               f"target={match.get('targetHands')}")
 
-        hands_acted = 0
-        last_status_at = time.time()
-        last_heartbeat_at = 0.0
-        rng = random.Random()
-        while True:
-            # 1. Tight poll on pending-actions (primary).
-            pending = client.get(
-                f"/texas/pending-actions?competitionId={competition_id}")
-            tables = (pending or {}).get("tables") if isinstance(pending, dict) else None
-            if tables:
-                # earliest deadline first
-                tables = sorted(tables, key=lambda t: (t.get("actionDeadlineAt") or 0))
-                table = tables[0]
-                research_context = retrieve_solver_context(table)
-                try:
-                    action = decide_fn(table, deadline_s=10.0,
-                                       research_context=research_context)
-                except TypeError:
-                    action = decide_fn(table, deadline_s=10.0)
-                try:
-                    client.post("/texas/action",
-                                {"tableId": table["tableId"], **action})
-                    hands_acted += 1
-                    state["hands_played"] = state.get("hands_played", 0) + 1
-                    save_state(state)
-                except ArenaError as e:
-                    if e.status == 409:
-                        # stale — re-poll, don't double-submit
-                        state["stale_count"] = state.get("stale_count", 0) + 1
-                        save_state(state)
-                        continue
-                    raise
-                if args.max_hands and hands_acted >= args.max_hands:
-                    pass
-
-            # 2. Background status refresh + terminal detection.
-            now = time.time()
-            if (not tables) or (now - last_status_at >= STATUS_REFRESH_S):
-                status = client.get(
-                    f"/texas/benchmark/status?competitionId={competition_id}")
-                last_status_at = now
-                if isinstance(status, dict):
-                    match = status.get("match") or {}
-                    # Heartbeat (throttled to once / 5s).
-                    if now - last_heartbeat_at >= 5.0:
-                        print(f"[arena-pokerkit] phase={match.get('phase')} | "
-                              f"completedHands={match.get('completedHands')}/"
-                              f"{match.get('targetHands')} | "
-                              f"adjustedBbPer100={match.get('adjustedBbPer100')} | "
-                              f"pending={len(tables or [])}")
-                        last_heartbeat_at = now
-                    phase = match.get("phase")
-                    msstatus = match.get("status")
-                    if phase in terminal_phases or msstatus in terminal_statuses:
-                        score = match.get("adjustedBbPer100")
-                        print(f"[arena-pokerkit] (dry-run) match terminal "
-                              f"({phase}/{msstatus}) | hands={match.get('completedHands')} "
-                              f"| adjustedBbPer100={score}")
-                        # Preserve unknown fields by dumping the whole match object.
-                        print(f"[arena-pokerkit] (dry-run) match summary: "
-                              f"{json.dumps(match, sort_keys=True)}")
-                        state["bankroll"] = int(match.get("rawChipDelta") or 0)
-                        save_state(state)
-                        if action_log:
-                            # In stale scenario, prefer the successful submission (last in log).
-                            chosen = action_log[-1]
-                            print(f"[arena-pokerkit] (dry-run) decided "
-                                  f"action={chosen.get('action')} "
-                                  f"amount={chosen.get('amount')} "
-                                  f"reasoning={chosen.get('reasoning')!r}")
-                        return 0
-
-            if not tables:
-                time.sleep(POLL_INTERVAL + rng.uniform(-POLL_JITTER, POLL_JITTER))
+        # P2-5: delegate to the shared live loop so dry-run does not drift.
+        # This gives the mock 400-fallback, 401/403 repair, malformed-input
+        # validation, --max-hands honoring, and a heartbeat before decide().
+        from agent import _run_benchmark_loop  # late import to avoid cycle
+        rc = _run_benchmark_loop(
+            client=client,
+            args=args,
+            competition_id=competition_id,
+            decide_fn=decide_fn,
+            retrieve_fn=retrieve_solver_context,
+            terminal_phases=terminal_phases,
+            terminal_statuses=terminal_statuses,
+            label=" (dry-run)",
+        )
+        if action_log:
+            chosen = action_log[-1]
+            print(f"[arena-pokerkit] (dry-run) decided "
+                  f"action={chosen.get('action')} "
+                  f"amount={chosen.get('amount')} "
+                  f"reasoning={chosen.get('reasoning')!r}")
+        return rc
     finally:
         client.close()

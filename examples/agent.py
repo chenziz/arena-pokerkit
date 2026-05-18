@@ -337,6 +337,234 @@ def _human_message(action: str, equity: float, pot_odds: float, hole: list[str])
 
 # ─── Live loop (glue — usually don't edit) ──────────────────────────────────
 
+def _safe_research_context(table: dict, retrieve_fn: Any) -> dict:
+    """Wrap the Auto Research hook in a guard so one builder bug / network
+    timeout cannot kill the whole match. Falls back to {} on any exception."""
+    if retrieve_fn is None:
+        return {}
+    try:
+        ctx = retrieve_fn(table)
+        return ctx if isinstance(ctx, dict) else {}
+    except Exception as e:
+        print(f"[arena-pokerkit] Auto Research hook failed: {e}, "
+              "continuing without context", file=sys.stderr)
+        return {}
+
+
+def _validate_pending_tables(pending: Any) -> list[dict]:
+    """Validate the /texas/pending-actions response shape and return a list of
+    legal table dicts (each has a string `tableId`). Malformed rows are
+    skipped + logged. Missing `tables` → empty list (caller degrades to
+    status polling)."""
+    if not isinstance(pending, dict):
+        print(f"[arena-pokerkit] pending-actions returned non-dict "
+              f"({type(pending).__name__}); falling back to status poll",
+              file=sys.stderr)
+        return []
+    raw = pending.get("tables")
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        print(f"[arena-pokerkit] pending-actions `tables` not a list "
+              f"({type(raw).__name__}); falling back to status poll",
+              file=sys.stderr)
+        return []
+    valid: list[dict] = []
+    for row in raw:
+        if not isinstance(row, dict):
+            print(f"[arena-pokerkit] skipping malformed pending row "
+                  f"(not a dict): {str(row)[:80]}", file=sys.stderr)
+            continue
+        tid = row.get("tableId")
+        if not isinstance(tid, str) or not tid:
+            print(f"[arena-pokerkit] skipping pending row without tableId",
+                  file=sys.stderr)
+            continue
+        valid.append(row)
+    return valid
+
+
+def _emit_heartbeat(phase: Any, completed: Any, target: Any, score: Any,
+                    pending_count: int, label: str = "") -> None:
+    prefix = f"[arena-pokerkit{label}]"
+    print(f"{prefix} phase={phase} | "
+          f"completedHands={completed}/{target} | "
+          f"adjustedBbPer100={score} | "
+          f"pending={pending_count}")
+
+
+def _attempt_credential_repair(client: ArenaClient, args: argparse.Namespace) -> bool:
+    """Mid-match 401/403 repair: nuke cached creds and re-register once.
+    Returns True if the new credentials work, False otherwise. Never loops."""
+    try:
+        from arena_client import CREDS_PATH  # local import to avoid stale ref
+        try:
+            CREDS_PATH.unlink()
+        except OSError:
+            pass
+        client.api_key = None
+        creds = load_or_register(client, args.handle, args.name, args.quote)
+        return bool(creds.get("apiKey") or client.api_key)
+    except Exception as e:
+        print(f"[arena-pokerkit] credential repair failed: {e}", file=sys.stderr)
+        return False
+
+
+def _run_benchmark_loop(
+    client: ArenaClient,
+    args: argparse.Namespace,
+    competition_id: str,
+    decide_fn: Any,
+    retrieve_fn: Any,
+    terminal_phases: set,
+    terminal_statuses: set,
+    label: str = "",
+) -> int:
+    """Shared runtime loop used by BOTH live (agent.py) and dry-run (mock.py).
+    Keeps 400-fallback, 409 re-poll, 401/403 mid-match repair, heartbeat,
+    --max-hands, and deadline computation identical across paths."""
+    state = load_state()
+    rng = random.Random()
+    hands_acted = 0
+    last_status_at = 0.0    # force one status check up front
+    last_heartbeat_at = 0.0
+    first_heartbeat_done = False
+    credential_repair_used = False
+
+    # P2-4: emit a heartbeat BEFORE the first decide() call so live mode
+    # shows immediate signs of life. We don't know phase yet; print zeros.
+    _emit_heartbeat(phase="(starting)", completed=0,
+                    target=args.max_hands or "?", score=None,
+                    pending_count=0, label=label)
+    last_heartbeat_at = time.time()
+    first_heartbeat_done = True
+
+    while True:
+        tables: list[dict] = []
+        try:
+            pending = client.get(
+                f"/texas/pending-actions?competitionId={competition_id}")
+            tables = _validate_pending_tables(pending)
+            tables = sorted(tables,
+                            key=lambda t: (t.get("actionDeadlineAt") or 0))
+        except ArenaError as e:
+            print(f"[arena-pokerkit] pending-actions error: {e}", file=sys.stderr)
+            if e.status in (401, 403):
+                if not credential_repair_used and _attempt_credential_repair(client, args):
+                    credential_repair_used = True
+                    continue
+                print(f"[arena-pokerkit] Credentials rejected mid-match "
+                      f"(HTTP {e.status}). Likely .arena-credentials is stale. "
+                      f"Run with a fresh handle: --handle <new-handle>",
+                      file=sys.stderr)
+                return 4
+            if e.status == 404:
+                # introspection said it should exist — fatal
+                raise
+
+        if tables:
+            table = tables[0]
+            deadline_ms = table.get("actionDeadlineAt") or 0
+            deadline_s = (max(0.0, (deadline_ms / 1000.0) - time.time())
+                          if deadline_ms else 10.0)
+            research_context = _safe_research_context(table, retrieve_fn)
+            try:
+                action = decide_fn(table, deadline_s=deadline_s,
+                                   research_context=research_context)
+            except TypeError:
+                action = decide_fn(table, deadline_s=deadline_s)
+            payload = {"tableId": table["tableId"], **action}
+            try:
+                client.post("/texas/action", payload)
+                hands_acted += 1
+                state["hands_played"] = state.get("hands_played", 0) + 1
+                state["last_action"] = {
+                    "action": action["action"],
+                    "amount": action.get("amount"),
+                    "at": int(time.time()),
+                }
+                save_state(state)
+            except ArenaError as e:
+                if e.status == 409:
+                    state["stale_count"] = state.get("stale_count", 0) + 1
+                    save_state(state)
+                    continue  # re-poll, don't re-submit
+                if e.status in (401, 403):
+                    if not credential_repair_used and _attempt_credential_repair(client, args):
+                        credential_repair_used = True
+                        continue
+                    print(f"[arena-pokerkit] Credentials rejected mid-match "
+                          f"(HTTP {e.status}). Likely .arena-credentials is stale. "
+                          f"Run with a fresh handle: --handle <new-handle>",
+                          file=sys.stderr)
+                    return 4
+                if e.status == 400:
+                    state["rejection_count"] = state.get("rejection_count", 0) + 1
+                    save_state(state)
+                    try:
+                        client.post("/texas/action", {
+                            "tableId": table["tableId"],
+                            "action": "fold",
+                            "message": "fallback after illegal action",
+                            "reasoning": _FALLBACK_REASONING,
+                        })
+                    except ArenaError:
+                        pass
+                    continue
+                raise
+            if args.max_hands and hands_acted >= args.max_hands:
+                print(f"[arena-pokerkit] hit --max-hands={args.max_hands}, stopping")
+                return 0
+
+        # Periodic status refresh + terminal detection.
+        now = time.time()
+        if (not tables) or (now - last_status_at >= STATUS_REFRESH_S):
+            status = None
+            try:
+                status = client.get(
+                    f"/texas/benchmark/status?competitionId={competition_id}")
+            except ArenaError as e:
+                print(f"[arena-pokerkit] status refresh error: {e}",
+                      file=sys.stderr)
+                if e.status in (401, 403):
+                    if not credential_repair_used and _attempt_credential_repair(client, args):
+                        credential_repair_used = True
+                        continue
+                    print(f"[arena-pokerkit] Credentials rejected mid-match "
+                          f"(HTTP {e.status}). Likely .arena-credentials is stale. "
+                          f"Run with a fresh handle: --handle <new-handle>",
+                          file=sys.stderr)
+                    return 4
+            last_status_at = now
+            if isinstance(status, dict):
+                match = status.get("match") or {}
+                if now - last_heartbeat_at >= 5.0:
+                    _emit_heartbeat(
+                        phase=match.get("phase"),
+                        completed=match.get("completedHands"),
+                        target=match.get("targetHands"),
+                        score=match.get("adjustedBbPer100"),
+                        pending_count=len(tables),
+                        label=label,
+                    )
+                    last_heartbeat_at = now
+                phase = match.get("phase")
+                msstatus = match.get("status")
+                if phase in terminal_phases or msstatus in terminal_statuses:
+                    print(f"[arena-pokerkit{label}] match terminal "
+                          f"({phase}/{msstatus}) | "
+                          f"hands={match.get('completedHands')} | "
+                          f"adjustedBbPer100={match.get('adjustedBbPer100')}")
+                    print(f"[arena-pokerkit{label}] match summary: "
+                          f"{json.dumps(match, sort_keys=True)}")
+                    state["bankroll"] = int(match.get("rawChipDelta") or 0)
+                    save_state(state)
+                    return 0
+
+        if not tables:
+            time.sleep(POLL_INTERVAL + rng.uniform(-POLL_JITTER, POLL_JITTER))
+
+
 def run_live_benchmark(args: argparse.Namespace,
                        decide_fn: Optional[Any] = None) -> int:
     """Live Poker Eval loop — matches the live poker-eval skill verbatim:
@@ -362,7 +590,6 @@ def run_live_benchmark(args: argparse.Namespace,
     decide_fn = decide_fn or decide
 
     client = ArenaClient(base, api_key=api_key)
-    state = load_state()
 
     try:
         # 1. Register / verify creds.
@@ -398,111 +625,17 @@ def run_live_benchmark(args: argparse.Namespace,
         print(f"[arena-pokerkit] benchmark started: phase={match.get('phase')} "
               f"target={match.get('targetHands')}")
 
-        # 4. Main loop: pending-actions primary, status secondary.
-        rng = random.Random()
-        hands_acted = 0
-        last_status_at = 0.0  # force one status check up front
-        last_heartbeat_at = 0.0
-
-        while True:
-            tables = None
-            try:
-                pending = client.get(
-                    f"/texas/pending-actions?competitionId={competition_id}")
-                if isinstance(pending, dict):
-                    raw = pending.get("tables") or []
-                    tables = sorted(raw,
-                                    key=lambda t: (t.get("actionDeadlineAt") or 0))
-            except ArenaError as e:
-                # 404 here is fatal — introspection said it should exist.
-                print(f"[arena-pokerkit] pending-actions error: {e}", file=sys.stderr)
-                if e.status in (404, 401, 403):
-                    raise
-
-            if tables:
-                table = tables[0]
-                deadline_ms = table.get("actionDeadlineAt") or 0
-                deadline_s = (max(0.0, (deadline_ms / 1000.0) - time.time())
-                              if deadline_ms else 10.0)
-                research_context = retrieve_solver_context(table)
-                try:
-                    action = decide_fn(table, deadline_s=deadline_s,
-                                       research_context=research_context)
-                except TypeError:
-                    action = decide_fn(table, deadline_s=deadline_s)
-                payload = {"tableId": table["tableId"], **action}
-                try:
-                    client.post("/texas/action", payload)
-                    hands_acted += 1
-                    state["hands_played"] = state.get("hands_played", 0) + 1
-                    state["last_action"] = {
-                        "action": action["action"],
-                        "amount": action.get("amount"),
-                        "at": int(time.time()),
-                    }
-                    save_state(state)
-                except ArenaError as e:
-                    if e.status == 409:
-                        state["stale_count"] = state.get("stale_count", 0) + 1
-                        save_state(state)
-                        # stale table — re-poll immediately, do not re-submit
-                        continue
-                    if e.status == 400:
-                        state["rejection_count"] = state.get("rejection_count", 0) + 1
-                        save_state(state)
-                        try:
-                            client.post("/texas/action", {
-                                "tableId": table["tableId"],
-                                "action": "fold",
-                                "message": "fallback after illegal action",
-                                "reasoning": _FALLBACK_REASONING,
-                            })
-                        except ArenaError:
-                            pass
-                        continue
-                    raise
-                if args.max_hands and hands_acted >= args.max_hands:
-                    print(f"[arena-pokerkit] hit --max-hands={args.max_hands}, stopping")
-                    return 0
-                # After acting, fall through to the next loop iteration.
-
-            # Periodic status refresh + terminal detection.
-            now = time.time()
-            if (not tables) or (now - last_status_at >= STATUS_REFRESH_S):
-                try:
-                    status = client.get(
-                        f"/texas/benchmark/status?competitionId={competition_id}")
-                except ArenaError as e:
-                    print(f"[arena-pokerkit] status refresh error: {e}",
-                          file=sys.stderr)
-                    status = None
-                last_status_at = now
-                if isinstance(status, dict):
-                    match = status.get("match") or {}
-                    # Heartbeat (throttled to once / 5s) — tells the user the
-                    # loop is alive without spamming the terminal.
-                    if now - last_heartbeat_at >= 5.0:
-                        print(f"[arena-pokerkit] phase={match.get('phase')} | "
-                              f"completedHands={match.get('completedHands')}/"
-                              f"{match.get('targetHands')} | "
-                              f"adjustedBbPer100={match.get('adjustedBbPer100')} | "
-                              f"pending={len(tables or [])}")
-                        last_heartbeat_at = now
-                    phase = match.get("phase")
-                    msstatus = match.get("status")
-                    if phase in terminal_phases or msstatus in terminal_statuses:
-                        print(f"[arena-pokerkit] match terminal ({phase}/{msstatus}) | "
-                              f"hands={match.get('completedHands')} | "
-                              f"adjustedBbPer100={match.get('adjustedBbPer100')}")
-                        # Preserve unknown fields with a full dump.
-                        print(f"[arena-pokerkit] match summary: "
-                              f"{json.dumps(match, sort_keys=True)}")
-                        state["bankroll"] = int(match.get("rawChipDelta") or 0)
-                        save_state(state)
-                        return 0
-
-            if not tables:
-                time.sleep(POLL_INTERVAL + rng.uniform(-POLL_JITTER, POLL_JITTER))
+        # 4. Shared main loop.
+        return _run_benchmark_loop(
+            client=client,
+            args=args,
+            competition_id=competition_id,
+            decide_fn=decide_fn,
+            retrieve_fn=retrieve_solver_context,
+            terminal_phases=terminal_phases,
+            terminal_statuses=terminal_statuses,
+            label="",
+        )
     finally:
         client.close()
 

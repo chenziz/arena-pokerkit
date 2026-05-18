@@ -359,3 +359,183 @@ def test_introspection_missing_endpoints_fails_loud():
     with pytest.raises(SystemExit) as exc:
         arena_client_mod.assert_endpoints(schema)
     assert "missing endpoint" in str(exc.value)
+
+
+# ─── R5 added smoke tests ───────────────────────────────────────────────────
+
+
+@respx.mock
+def test_409_stale_table_re_polls():
+    """First /texas/action → 409 (stale). Loop must re-poll
+    /texas/pending-actions and submit again — exactly 2 action POSTs."""
+    import time as _time
+
+    respx.post(f"{MOCK_BASE}/auth/register").mock(
+        return_value=httpx.Response(200, json={
+            "agentId": "agent_stale", "apiKey": "k",
+            "handle": "h", "name": "n",
+        })
+    )
+    respx.get(f"{MOCK_BASE}/agent/me").mock(
+        return_value=httpx.Response(200, json={"id": "agent_stale"})
+    )
+    respx.get(f"{MOCK_BASE}/__introspection").mock(
+        return_value=httpx.Response(200, json=_introspection_payload())
+    )
+    respx.post(f"{MOCK_BASE}/texas/benchmark/start").mock(
+        return_value=httpx.Response(200, json=_start_payload("queued"))
+    )
+
+    table = _table_state(_time.time() + 10.0)
+    table2 = {**table, "tableId": "tbl_1"}  # fresh table, same id
+
+    # pending: serve table, then serve again after 409, then empty.
+    respx.get(re.compile(
+        re.escape(f"{MOCK_BASE}/texas/pending-actions") + r"\?.*"
+    )).mock(side_effect=[
+        httpx.Response(200, json={"tables": [table]}),
+        httpx.Response(200, json={"tables": [table2]}),
+        httpx.Response(200, json={"tables": []}),
+        httpx.Response(200, json={"tables": []}),
+    ])
+
+    # status: running, running, then completed.
+    respx.get(re.compile(
+        re.escape(f"{MOCK_BASE}/texas/benchmark/status") + r"\?.*"
+    )).mock(side_effect=[
+        httpx.Response(200, json=_start_payload("queued")),
+        _completed_status(),
+        _completed_status(),
+    ])
+
+    action_route = respx.post(f"{MOCK_BASE}/texas/action").mock(side_effect=[
+        httpx.Response(409, json={"error": "stale"}),
+        httpx.Response(200, json={"table": table, "participant": None}),
+    ])
+
+    rc = agent_mod.main(["--dry-run", "--competition-id", "comp_test"])
+    assert rc == 0
+    assert action_route.call_count == 2, (
+        f"expected exactly 2 action POSTs (1 stale + 1 retry), "
+        f"got {action_route.call_count}"
+    )
+
+
+def test_429_retry_with_backoff(monkeypatch):
+    """ArenaClient must honor Retry-After on 429 and retry. We patch
+    time.sleep and assert it was called at least once before a 200."""
+    import time as _time
+    sleeps: list[float] = []
+    monkeypatch.setattr("arena_client.time.sleep", lambda s: sleeps.append(s))
+
+    with respx.mock(base_url=MOCK_BASE, assert_all_called=False) as router:
+        router.get("/agent/me").mock(side_effect=[
+            httpx.Response(429, headers={"Retry-After": "0"}, json={"error": "rate"}),
+            httpx.Response(200, json={"id": "agent_x"}),
+        ])
+        client = arena_client_mod.ArenaClient(MOCK_BASE, api_key="k")
+        try:
+            body = client.get("/agent/me")
+            assert isinstance(body, dict) and body.get("id") == "agent_x"
+        finally:
+            client.close()
+
+    assert len(sleeps) >= 1, f"expected at least one sleep call on 429, got {sleeps}"
+
+
+@respx.mock
+def test_malformed_pending_actions_response():
+    """If /texas/pending-actions returns a non-dict or {"tables": "not-a-list"},
+    the loop must log a warning + degrade to status polling, not crash."""
+    respx.post(f"{MOCK_BASE}/auth/register").mock(
+        return_value=httpx.Response(200, json={
+            "agentId": "agent_mf", "apiKey": "k",
+            "handle": "h", "name": "n",
+        })
+    )
+    respx.get(f"{MOCK_BASE}/agent/me").mock(
+        return_value=httpx.Response(200, json={"id": "agent_mf"})
+    )
+    respx.get(f"{MOCK_BASE}/__introspection").mock(
+        return_value=httpx.Response(200, json=_introspection_payload())
+    )
+    respx.post(f"{MOCK_BASE}/texas/benchmark/start").mock(
+        return_value=httpx.Response(200, json=_start_payload("queued"))
+    )
+
+    # First call → "tables" is a string (illegal); second → list-but-malformed;
+    # then empty so the loop relies on status polling.
+    respx.get(re.compile(
+        re.escape(f"{MOCK_BASE}/texas/pending-actions") + r"\?.*"
+    )).mock(side_effect=[
+        httpx.Response(200, json={"tables": "should-be-a-list"}),
+        httpx.Response(200, json={"tables": [{"no": "tableId"}, "string-row"]}),
+        httpx.Response(200, json={"tables": []}),
+    ])
+
+    respx.get(re.compile(
+        re.escape(f"{MOCK_BASE}/texas/benchmark/status") + r"\?.*"
+    )).mock(side_effect=[
+        httpx.Response(200, json=_start_payload("queued")),
+        _completed_status(),
+    ])
+
+    action_route = respx.post(f"{MOCK_BASE}/texas/action").mock(
+        return_value=httpx.Response(500, json={"error": "must-not-be-called"})
+    )
+
+    rc = agent_mod.main(["--dry-run", "--competition-id", "comp_test"])
+    assert rc == 0, f"agent should exit cleanly via status polling, got {rc}"
+    assert action_route.call_count == 0, (
+        "no action should be submitted when every pending response is malformed"
+    )
+
+
+@respx.mock
+def test_terminal_cancelled_phase():
+    """If benchmark/status reports phase='cancelled', the loop must stop
+    cleanly with exit 0 (terminal phase recognized from introspection enum)."""
+    respx.post(f"{MOCK_BASE}/auth/register").mock(
+        return_value=httpx.Response(200, json={
+            "agentId": "agent_c", "apiKey": "k",
+            "handle": "h", "name": "n",
+        })
+    )
+    respx.get(f"{MOCK_BASE}/agent/me").mock(
+        return_value=httpx.Response(200, json={"id": "agent_c"})
+    )
+    respx.get(f"{MOCK_BASE}/__introspection").mock(
+        return_value=httpx.Response(200, json=_introspection_payload())
+    )
+    respx.post(f"{MOCK_BASE}/texas/benchmark/start").mock(
+        return_value=httpx.Response(200, json=_start_payload("queued"))
+    )
+
+    pending_route = respx.get(re.compile(
+        re.escape(f"{MOCK_BASE}/texas/pending-actions") + r"\?.*"
+    )).mock(return_value=httpx.Response(200, json={"tables": []}))
+
+    respx.get(re.compile(
+        re.escape(f"{MOCK_BASE}/texas/benchmark/status") + r"\?.*"
+    )).mock(return_value=httpx.Response(200, json={
+        "match": {
+            "id": "m1", "competitionId": "comp_test", "agentId": "agent_c",
+            "status": "Cancelled", "phase": "cancelled",
+            "targetHands": 10, "completedHands": 3,
+            "rawChipDelta": -50, "rawBbPer100": -2.5,
+            "adjustedChipDelta": None, "adjustedBbPer100": None,
+            "currentTableId": None, "startedAt": 1, "endedAt": 2,
+            "error": "manual cancel",
+        },
+        "table": None, "participant": None,
+    }))
+
+    action_route = respx.post(f"{MOCK_BASE}/texas/action").mock(
+        return_value=httpx.Response(500, json={"error": "must-not-be-called"})
+    )
+
+    rc = agent_mod.main(["--dry-run", "--competition-id", "comp_test"])
+    assert rc == 0, f"cancelled phase should exit cleanly, got {rc}"
+    assert action_route.call_count == 0, "no action when no pending tables"
+    # Pending was polled at least once before terminal detection — bounded.
+    assert pending_route.call_count >= 1

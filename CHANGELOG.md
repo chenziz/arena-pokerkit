@@ -2,6 +2,29 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.1] — 2026-05-18
+
+### Fixed (Codex round-5 review)
+- Wrap `retrieve_solver_context()` in `try/except` so one Auto Research crash
+  no longer kills the live loop; falls back to `{}` with a logged warning.
+- Validate `/texas/pending-actions` response shape (non-dict / non-list
+  `tables` / rows without `tableId`) and degrade to status polling instead of
+  raising mid-loop.
+- Mid-match 401/403 now triggers exactly one credential re-register attempt
+  before exiting with code 4 + a "fresh handle" remediation message.
+- Emit a heartbeat line immediately after `benchmark/start`, before the first
+  `decide()` call, so live mode shows signs of life within ~2 s.
+- `_atomic_write()` uses a unique per-process tempfile (`tempfile.mkstemp`)
+  to avoid races between two concurrent agents in the same cwd.
+
+### Changed
+- Extracted the runtime loop into `_run_benchmark_loop()` in `agent.py` so
+  live and dry-run share one implementation (no more drift on 400 fallback,
+  `--max-hands`, heartbeat throttle, or deadline computation).
+- `tests/test_llm_parser.py` is now committed (removed from `.gitignore`).
+- Added 4 smoke tests: 409 stale re-poll, 429 retry-with-backoff,
+  malformed pending-actions response, terminal `cancelled` phase.
+
 ## [0.3.0] — 2026-05-18
 
 ### Added

@@ -16,7 +16,9 @@ Builders normally only touch `examples/agent.py` — this file is shared by
 from __future__ import annotations
 
 import json
+import os
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -255,6 +257,21 @@ def save_state(state: dict) -> None:
 
 
 def _atomic_write(path: Path, contents: str) -> None:
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(contents)
-    tmp.replace(path)
+    """Write atomically using a unique per-process tempfile so two concurrent
+    agents in the same cwd cannot clobber each other's `.tmp` file."""
+    parent = path.parent if str(path.parent) else Path(".")
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=path.name + ".",
+        suffix=".tmp",
+        dir=str(parent) if str(parent) else None,
+    )
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(contents)
+        os.replace(tmp_name, str(path))
+    except Exception:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise

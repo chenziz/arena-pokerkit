@@ -1,19 +1,23 @@
 """Arena PokerKit — L1 heuristic agent.
 
-End-to-end PVE Benchmark loop:
+End-to-end Poker Eval Benchmark loop, matched to the live poker-eval skill:
+
   1. load .env
-  2. register (or load .arena-credentials)
-  3. start a benchmark match
-  4. poll status; when phase == "waiting_user", call decide()
-  5. submit action with required YAML reasoning
+  2. register (or load .arena-credentials, verified with GET /agent/me)
+  3. introspect API at GET /__introspection — fail fast if endpoints moved
+  4. POST /texas/benchmark/start
+  5. tight loop:
+       GET /texas/pending-actions?competitionId=... → tables[]
+       if tables: pick earliest deadline → decide() → POST /texas/action
+       else: periodically refresh GET /texas/benchmark/status
+       exit when match status is terminal (set from introspection enum)
   6. persist .arena-poker-state
-  7. exit when phase == "completed"
 
 The decision logic builders typically edit lives in decide(). Everything
 else is glue.
 
 CLI:
-    uv run examples/agent.py                       # live
+    uv run examples/agent.py                       # live (uses .env)
     uv run examples/agent.py --competition-id <id> # override env
     uv run examples/agent.py --dry-run             # mock loop, no network
     uv run examples/agent.py --max-hands 10        # cap hands before exit
@@ -46,9 +50,29 @@ MOCK_BASE = "http://mock.local/api/arena"  # --dry-run rebinds to this
 MOCK_COMPETITION_ID = "comp_dryrun"
 CREDS_PATH = Path(".arena-credentials")
 STATE_PATH = Path(".arena-poker-state")
-POLL_INTERVAL = 2.0
-POLL_JITTER = 0.5
+POLL_INTERVAL = 1.0        # tight pending-actions poll
+POLL_JITTER = 0.3
+STATUS_REFRESH_S = 8.0      # background refresh of benchmark/status
 RETRY_MAX = 3
+
+# Required endpoints we expect introspection to expose. If any are missing,
+# the live API has moved and we fail fast rather than 404 mid-hand.
+# Note: /__introspection is intentionally excluded — it's a meta-endpoint that
+# does not list itself in its own output.
+REQUIRED_ENDPOINTS = (
+    ("POST", "/api/arena/auth/register"),
+    ("GET",  "/api/arena/agent/me"),
+    ("POST", "/api/arena/texas/benchmark/start"),
+    ("GET",  "/api/arena/texas/benchmark/status"),
+    ("GET",  "/api/arena/texas/pending-actions"),
+    ("POST", "/api/arena/texas/action"),
+)
+
+# Cached-from-build-time terminal phases. We overwrite this with introspection
+# values when available. Listed in poker-eval.md as "may be stale, derived
+# from cached examples" — introspection wins.
+FALLBACK_TERMINAL_PHASES = ("completed", "cancelled", "failed")
+FALLBACK_TERMINAL_STATUSES = ("Completed", "Cancelled", "Failed")
 
 
 # ─── HTTP client ────────────────────────────────────────────────────────────
@@ -58,6 +82,7 @@ class ArenaError(Exception):
         super().__init__(f"{where} status={status} body={body}")
         self.status = status
         self.body = body
+        self.where = where
 
 
 class ArenaClient:
@@ -120,22 +145,118 @@ class ArenaClient:
         return self._req("POST", path, json=json_body)
 
 
+# ─── Introspection ──────────────────────────────────────────────────────────
+
+def fetch_introspection(client: ArenaClient) -> dict:
+    """GET /__introspection at startup. Returns a parsed dict with at least
+    {endpoints: [...]} so callers can resolve terminal phases / statuses."""
+    try:
+        schema = client.get("/__introspection")
+    except ArenaError as e:
+        raise SystemExit(
+            f"[arena-pokerkit] introspection unreachable ({e.where} -> "
+            f"{e.status}). The live API may be down; cannot continue safely."
+        )
+    if not isinstance(schema, dict):
+        raise SystemExit("[arena-pokerkit] introspection returned non-object — refusing to continue.")
+    return schema
+
+
+def assert_endpoints(schema: dict, required: tuple[tuple[str, str], ...] = REQUIRED_ENDPOINTS) -> None:
+    """Verify every (method, path) we plan to call is present in introspection.
+    If anything is missing we fail loud, not silently 404 mid-hand."""
+    endpoints = schema.get("endpoints") or []
+    present = {(e.get("method"), e.get("path")) for e in endpoints if isinstance(e, dict)}
+    missing = [pair for pair in required if pair not in present]
+    if missing:
+        raise SystemExit(
+            "[arena-pokerkit] live API schema missing endpoint(s): "
+            + ", ".join(f"{m} {p}" for m, p in missing)
+            + ". The schema may have moved — read /api/arena/__introspection "
+            "and update REQUIRED_ENDPOINTS in examples/agent.py."
+        )
+
+
+def resolve_terminal_phases(schema: dict) -> tuple[set[str], set[str]]:
+    """Pull match.phase enum and match.status enum from the
+    /texas/benchmark/start output schema. Falls back to cached lists if the
+    schema can't be parsed. Returns (terminal_phases, terminal_statuses)."""
+    phase_enum: list[str] = []
+    status_enum: list[str] = []
+    for ep in (schema.get("endpoints") or []):
+        if not isinstance(ep, dict):
+            continue
+        if ep.get("path") != "/api/arena/texas/benchmark/start":
+            continue
+        out = ep.get("output") or {}
+        match = ((out.get("properties") or {}).get("match")) or {}
+        # match may be inside an anyOf
+        candidates = match.get("anyOf") or [match]
+        for cand in candidates:
+            props = (cand.get("properties") or {})
+            ph = props.get("phase") or {}
+            st = props.get("status") or {}
+            if ph.get("enum"):
+                phase_enum = ph["enum"]
+            if st.get("enum"):
+                status_enum = st["enum"]
+            if phase_enum and status_enum:
+                break
+        break
+
+    if not phase_enum:
+        phase_enum = list(FALLBACK_TERMINAL_PHASES) + ["queued", "panel_acting", "waiting_user"]
+    if not status_enum:
+        status_enum = list(FALLBACK_TERMINAL_STATUSES) + ["Running"]
+
+    # Heuristic for "terminal" — anything other than Running/queued/panel_acting/waiting_user.
+    live_phases = {"queued", "panel_acting", "waiting_user"}
+    terminal_phases = {p for p in phase_enum if p.lower() not in live_phases and p != "Running"}
+    terminal_statuses = {s for s in status_enum if s != "Running"}
+    if not terminal_phases:
+        terminal_phases = set(FALLBACK_TERMINAL_PHASES)
+    if not terminal_statuses:
+        terminal_statuses = set(FALLBACK_TERMINAL_STATUSES)
+    return terminal_phases, terminal_statuses
+
+
 # ─── Credentials + state ────────────────────────────────────────────────────
 
 def load_or_register(client: ArenaClient, handle: str, name: str, quote: str) -> dict:
-    """Idempotent: returns cached creds if .arena-credentials exists, otherwise
-    POSTs /auth/register and caches the response."""
+    """Idempotent: returns cached creds (verified with /agent/me) if
+    .arena-credentials exists, otherwise POSTs /auth/register and caches
+    the response. On 401/403 the cached key is discarded and we register
+    fresh — matches arena.md auth-repair guidance."""
     if CREDS_PATH.exists():
-        creds = json.loads(CREDS_PATH.read_text())
-        client.api_key = creds.get("apiKey")
-        return creds
+        try:
+            creds = json.loads(CREDS_PATH.read_text())
+        except Exception:
+            creds = {}
+        key = creds.get("apiKey")
+        if key:
+            client.api_key = key
+            try:
+                me = client.get("/agent/me")
+                if isinstance(me, dict) and (me.get("id") or me.get("agentId") or me.get("handle")):
+                    return creds
+            except ArenaError as e:
+                if e.status in (401, 403):
+                    print(f"[arena-pokerkit] cached key rejected ({e.status}); re-registering",
+                          file=sys.stderr)
+                    client.api_key = None
+                    try:
+                        CREDS_PATH.unlink()
+                    except OSError:
+                        pass
+                else:
+                    raise
     body = client.post("/auth/register", {
         "handle": handle, "name": name, "quote": quote, "description": "",
     })
-    if "apiKey" in body:
+    if isinstance(body, dict) and "apiKey" in body:
         client.api_key = body["apiKey"]
     _atomic_write(CREDS_PATH, json.dumps(body, indent=2))
-    return body
+    return body if isinstance(body, dict) else {}
 
 
 def load_state() -> dict:
@@ -246,14 +367,35 @@ def _to_treys(card_str: str) -> str:
     return r + s
 
 
+# ─── Auto Research hook ─────────────────────────────────────────────────────
+# AUTO-RESEARCH HOOK
+# Called immediately before decide(table) on every fresh pending table.
+# Default impl is a no-op. Override to plug in:
+#   - preflop GTO chart lookup (GTOWizard API, free 100/day tier)
+#   - postflop solver retrieval (WASM Postflop, GTO+ exports, TexasSolver)
+#   - opponent style HUD from Arena /texas/agent-stats?agentId=...
+#   - vector-store solver lookups (Pinecone/Qdrant on labeled spots)
+# See docs/strategy.md "Auto Research" for the L2/L3 wiring pattern.
+def retrieve_solver_context(table: dict) -> dict:
+    """Return a small dict of extra context for decide() / llm_decide().
+    Empty by default. Builders override this and pass the result into their
+    own decide() implementation. The L2 (LLM) and L3 (trained weights) paths
+    benefit the most — see docs/strategy.md."""
+    return {}
+
+
 # ─── decide() — the part builders edit ──────────────────────────────────────
 
-def decide(table: dict, deadline_s: float = 10.0) -> dict:
+def decide(table: dict, deadline_s: float = 10.0,
+           research_context: Optional[dict] = None) -> dict:
     """Return one action: {action, amount?, message, reasoning}.
 
     Reasoning is YAML flow style, max 150 chars, required on benchmark tables:
       {vr: "<range>", ke: "<num+unit>", bf: [<features>], pp: "<plan>", sr: "<size reason>"}
-    """
+
+    research_context is an optional dict from retrieve_solver_context() —
+    L1 ignores it. L2/L3 should consult it (preflop charts, postflop
+    solver frequencies, opponent style)."""
     allowed = table.get("allowedActions") or {}
     available = allowed.get("availableActions") or []
 
@@ -332,18 +474,22 @@ def _build(action: str, amount: Optional[int], table: dict, allowed: dict,
     payload: dict[str, Any] = {
         "action": action,
         "message": msg[:500],
-        "reasoning": reasoning[:150],
+        "reasoning": reasoning,
     }
     if amount is not None:
         payload["amount"] = int(amount)
     return payload
 
 
+# Safe fallback YAML — fits well under 150 chars and is grammatical.
+_FALLBACK_REASONING = '{vr: "std", ke: "legal", pp: "pot control"}'
+
+
 def _build_reasoning(action: str, equity: float, pot_odds: float,
                      table: dict, allowed: dict) -> str:
-    """YAML flow style under 150 chars.
-      {vr: "<range>", ke: "<num+unit>", bf: [<features>], pp: "<plan>", sr: "<size reason>"}
-    """
+    """YAML flow style under 150 chars. Build capped field values first;
+    fall back to a known-valid short object if the serialized string overflows,
+    never blind-slice to 150 (per REVIEW-2 #6)."""
     board = table.get("boardCards") or []
     street = (table.get("street") or "Preflop")
     self_seat = table.get("selfSeatNumber") or 0
@@ -351,26 +497,25 @@ def _build_reasoning(action: str, equity: float, pot_odds: float,
     pos_label = "IP" if self_seat and self_seat % 2 == 0 else "OOP"
     plan_map = {"Preflop": "see flop", "Flop": "barrel T", "Turn": "ck R",
                 "River": "showdown"}
-    pp = f"{pos_label} {plan_map.get(street, 'pot ctrl')}"
+    pp = f"{pos_label} {plan_map.get(street, 'pot ctrl')}"[:30]
     # board features
     if not board:
         bf = "[]"
     else:
         suits = [c[-1].lower() for c in board]
-        feats = []
+        feats: list[str] = []
         for s in set(suits):
             if suits.count(s) >= 2:
                 feats.append(f"FD-{s}")
-        # detect pair on board
         ranks = [c[0].upper() for c in board]
         if len(set(ranks)) < len(ranks):
             feats.append("paired")
         bf = "[" + ",".join(feats[:3]) + "]" if feats else "[dry]"
-    ke = f"{int(round(equity * 100))}% eq"
+    ke = f"{int(round(equity * 100))}% eq"[:30]
     if action in ("bet", "raise", "all-in"):
-        sr = f"po {int(round(pot_odds * 100))}% sized for FE"
+        sr = f"po {int(round(pot_odds * 100))}% sized for FE"[:30]
     elif action == "call":
-        sr = f"po {int(round(pot_odds * 100))}% covered"
+        sr = f"po {int(round(pot_odds * 100))}% covered"[:30]
     else:
         sr = ""
     parts = [
@@ -382,15 +527,17 @@ def _build_reasoning(action: str, equity: float, pot_odds: float,
     if sr:
         parts.append(f'sr: "{sr}"')
     yaml = "{" + ", ".join(parts) + "}"
-    if len(yaml) > 150:
-        # Drop sr first, then bf, until it fits.
-        for drop_i in (4, 2):
-            if drop_i < len(parts):
-                parts = parts[:drop_i] + parts[drop_i + 1:]
-                yaml = "{" + ", ".join(parts) + "}"
-                if len(yaml) <= 150:
-                    break
-    return yaml[:150]
+    if len(yaml) <= 150:
+        return yaml
+    # Drop sr first, then bf, until it fits.
+    for drop_i in (4, 2):
+        if drop_i < len(parts):
+            trimmed = parts[:drop_i] + parts[drop_i + 1:]
+            candidate = "{" + ", ".join(trimmed) + "}"
+            if len(candidate) <= 150:
+                return candidate
+    # Last resort — known-valid short object. Never blind-slice.
+    return _FALLBACK_REASONING
 
 
 def _human_message(action: str, equity: float, pot_odds: float, hole: list[str]) -> str:
@@ -427,19 +574,22 @@ def _respx_active() -> bool:
         return False
 
 
-def _mock_table() -> dict:
-    """Synthetic table identical in shape to a live benchmark waiting_user
-    table — hero faces a $100 bet on Ah Kd 7c with AsKs."""
+def _mock_table(competition_id: str) -> dict:
+    """Synthetic table identical in shape to a live pending-actions row:
+    hero faces a $100 bet on Ah Kd 7c with AsKs."""
     return {
         "id": "tbl_dry",
         "tableId": "tbl_dry",
         "tableNumber": 1,
-        "competitionId": MOCK_COMPETITION_ID,
+        "competitionId": competition_id,
         "status": "Active",
         "street": "Flop",
         "potChips": 300,
         "currentBet": 100,
         "minRaiseTo": 200,
+        "startedAt": 1700000000000,
+        "endedAt": None,
+        "countdownEndsAt": None,
         "actionDeadlineAt": None,
         "currentSeatNumber": 1,
         "boardCards": ["Ah", "Kd", "7c"],
@@ -479,16 +629,55 @@ def _mock_table() -> dict:
     }
 
 
-def run_mock_benchmark(args: argparse.Namespace) -> int:
+def _mock_introspection_schema() -> dict:
+    """Tiny introspection skeleton that satisfies assert_endpoints() and
+    resolve_terminal_phases() in dry-run mode."""
+    return {
+        "endpoints": [
+            {"method": "POST", "path": "/api/arena/auth/register", "auth": False},
+            {"method": "GET",  "path": "/api/arena/agent/me", "auth": True},
+            {"method": "GET",  "path": "/api/arena/__introspection", "auth": True},
+            {"method": "POST", "path": "/api/arena/texas/benchmark/start", "auth": True,
+             "output": {
+                 "properties": {
+                     "match": {
+                         "properties": {
+                             "phase": {"enum": ["queued", "panel_acting",
+                                                "waiting_user", "completed",
+                                                "cancelled", "failed"]},
+                             "status": {"enum": ["Running", "Completed",
+                                                 "Cancelled", "Failed"]},
+                         }
+                     }
+                 }
+             }},
+            {"method": "GET",  "path": "/api/arena/texas/benchmark/status", "auth": True},
+            {"method": "GET",  "path": "/api/arena/texas/pending-actions", "auth": True},
+            {"method": "POST", "path": "/api/arena/texas/action", "auth": True},
+        ]
+    }
+
+
+def run_mock_benchmark(args: argparse.Namespace,
+                       decide_fn: Optional[Any] = None) -> int:
     """In-process dry-run: wire httpx.MockTransport into ArenaClient so the
-    full happy path runs end-to-end with zero network access. Mirrors the
-    canned responses in tests/test_smoke.py."""
-    competition_id = args.competition_id or os.environ.get("ARENA_COMPETITION_ID") or MOCK_COMPETITION_ID
-    table_state = _mock_table()
+    full happy path runs end-to-end with zero network access.
+
+    decide_fn lets the L2 dry-run inject `llm_decide` so --dry-run actually
+    exercises the LLM path (per REVIEW-2 #11)."""
+    competition_id = (args.competition_id
+                      or os.environ.get("ARENA_COMPETITION_ID")
+                      or MOCK_COMPETITION_ID)
+    table_state = _mock_table(competition_id)
     target_hands = max(int(args.max_hands or 1), 1)
 
-    # State machine: status polls walk waiting_user -> completed.
+    decide_fn = decide_fn or decide
+
+    # State for the mock — pending_idx walks tables → empty;
+    # status_idx walks running → completed after the action lands.
+    pending_idx = {"i": 0}
     status_idx = {"i": 0}
+    action_landed = {"v": False}
 
     def _status_payload(phase: str, completed: int, table: Optional[dict]) -> dict:
         return {
@@ -501,7 +690,7 @@ def run_mock_benchmark(args: argparse.Namespace) -> int:
                 "rawBbPer100": 12.5 if phase == "completed" else 0.0,
                 "adjustedChipDelta": 200.0 if phase == "completed" else None,
                 "adjustedBbPer100": 10.0 if phase == "completed" else None,
-                "currentTableId": table.get("tableId") if table else None,
+                "currentTableId": (table.get("tableId") if table else None),
                 "startedAt": 1700000000000,
                 "endedAt": 1700000010000 if phase == "completed" else None,
                 "error": None,
@@ -519,25 +708,37 @@ def run_mock_benchmark(args: argparse.Namespace) -> int:
                 "agentId": "agent_dry", "apiKey": "dry_key_xxx",
                 "handle": args.handle, "name": args.name,
             })
+        if path.endswith("/agent/me"):
+            return httpx.Response(200, json={
+                "id": "agent_dry", "agentId": "agent_dry",
+                "handle": args.handle, "name": args.name,
+            })
+        if path.endswith("/__introspection"):
+            return httpx.Response(200, json=_mock_introspection_schema())
         if path.endswith("/texas/benchmark/start"):
             return httpx.Response(200, json=_status_payload("queued", 0, None))
+        if path.endswith("/texas/pending-actions"):
+            i = pending_idx["i"]
+            pending_idx["i"] += 1
+            if i == 0 and not action_landed["v"]:
+                return httpx.Response(200, json={"tables": [table_state]})
+            return httpx.Response(200, json={"tables": []})
         if path.endswith("/texas/benchmark/status"):
             i = status_idx["i"]
             status_idx["i"] += 1
-            if i == 0:
-                return httpx.Response(200, json=_status_payload("waiting_user", 0, table_state))
-            return httpx.Response(200, json=_status_payload("completed", target_hands, None))
+            if action_landed["v"]:
+                return httpx.Response(200, json=_status_payload("completed", target_hands, None))
+            return httpx.Response(200, json=_status_payload("queued", 0, None))
         if path.endswith("/texas/action"):
             try:
                 action_log.append(json.loads(request.content.decode()))
             except Exception:
                 pass
+            action_landed["v"] = True
             return httpx.Response(200, json={"table": table_state, "participant": None})
         return httpx.Response(404, json={"error": f"unmocked {path}"})
 
     client = ArenaClient(MOCK_BASE, api_key="dry_key_xxx")
-    # If a test harness (respx) is already intercepting httpx traffic, do
-    # NOT install our own MockTransport — the test's routes will answer.
     if not _respx_active():
         client._client.close()
         client._client = httpx.Client(transport=httpx.MockTransport(_handler),
@@ -546,68 +747,89 @@ def run_mock_benchmark(args: argparse.Namespace) -> int:
 
     try:
         creds = load_or_register(client, args.handle, args.name, args.quote)
-        print(f"[arena-pokerkit] (dry-run) registered agent={creds.get('agentId', '?')} base={MOCK_BASE}")
+        print(f"[arena-pokerkit] (dry-run) registered agent={creds.get('agentId', '?')} "
+              f"base={MOCK_BASE}")
 
-        status = client.post("/texas/benchmark/start", {"competitionId": competition_id})
-        if not isinstance(status, dict):
-            raise ArenaError(0, str(status)[:200], "benchmark/start malformed")
-        match = status.get("match") or {}
+        schema = fetch_introspection(client)
+        assert_endpoints(schema)
+        terminal_phases, terminal_statuses = resolve_terminal_phases(schema)
+
+        start_resp = client.post("/texas/benchmark/start",
+                                 {"competitionId": competition_id})
+        if not isinstance(start_resp, dict):
+            raise ArenaError(0, str(start_resp)[:200], "benchmark/start malformed")
+        match = start_resp.get("match") or {}
         print(f"[arena-pokerkit] (dry-run) benchmark started: phase={match.get('phase')} "
               f"target={match.get('targetHands')}")
 
         hands_acted = 0
+        last_status_at = time.time()
+        rng = random.Random()
         while True:
-            status = client.get(f"/texas/benchmark/status?competitionId={competition_id}")
-            if not isinstance(status, dict):
-                raise ArenaError(0, str(status)[:200], "benchmark/status malformed")
-            match = status.get("match") or {}
-            phase = match.get("phase")
-            if phase == "completed":
-                score = match.get("adjustedBbPer100")
-                print(f"[arena-pokerkit] (dry-run) match completed | hands="
-                      f"{match.get('completedHands')} | adjustedBbPer100={score}")
-                state["bankroll"] = int(match.get("rawChipDelta") or 0)
-                save_state(state)
-                if action_log:
-                    print(f"[arena-pokerkit] (dry-run) decided action={action_log[0].get('action')} "
-                          f"amount={action_log[0].get('amount')} "
-                          f"reasoning={action_log[0].get('reasoning')!r}")
-                return 0
-            if phase == "waiting_user" and status.get("table"):
-                table = status["table"]
-                action = decide(table, deadline_s=10.0)
-                client.post("/texas/action", {"tableId": table["tableId"], **action})
+            # 1. Tight poll on pending-actions (primary).
+            pending = client.get(
+                f"/texas/pending-actions?competitionId={competition_id}")
+            tables = (pending or {}).get("tables") if isinstance(pending, dict) else None
+            if tables:
+                # earliest deadline first
+                tables = sorted(tables, key=lambda t: (t.get("actionDeadlineAt") or 0))
+                table = tables[0]
+                research_context = retrieve_solver_context(table)
+                try:
+                    action = decide_fn(table, deadline_s=10.0,
+                                       research_context=research_context)
+                except TypeError:
+                    action = decide_fn(table, deadline_s=10.0)
+                client.post("/texas/action",
+                            {"tableId": table["tableId"], **action})
                 hands_acted += 1
                 state["hands_played"] = state.get("hands_played", 0) + 1
                 save_state(state)
                 if args.max_hands and hands_acted >= args.max_hands:
-                    # Force the next status to flip to completed so the loop exits cleanly.
                     pass
+
+            # 2. Background status refresh + terminal detection.
+            now = time.time()
+            if (not tables) or (now - last_status_at >= STATUS_REFRESH_S):
+                status = client.get(
+                    f"/texas/benchmark/status?competitionId={competition_id}")
+                last_status_at = now
+                if isinstance(status, dict):
+                    match = status.get("match") or {}
+                    phase = match.get("phase")
+                    msstatus = match.get("status")
+                    if phase in terminal_phases or msstatus in terminal_statuses:
+                        score = match.get("adjustedBbPer100")
+                        print(f"[arena-pokerkit] (dry-run) match terminal "
+                              f"({phase}/{msstatus}) | hands={match.get('completedHands')} "
+                              f"| adjustedBbPer100={score}")
+                        # Preserve unknown fields by dumping the whole match object.
+                        print(f"[arena-pokerkit] (dry-run) match summary: "
+                              f"{json.dumps(match, sort_keys=True)}")
+                        state["bankroll"] = int(match.get("rawChipDelta") or 0)
+                        save_state(state)
+                        if action_log:
+                            print(f"[arena-pokerkit] (dry-run) decided "
+                                  f"action={action_log[0].get('action')} "
+                                  f"amount={action_log[0].get('amount')} "
+                                  f"reasoning={action_log[0].get('reasoning')!r}")
+                        return 0
+
+            if not tables:
+                time.sleep(POLL_INTERVAL + rng.uniform(-POLL_JITTER, POLL_JITTER))
     finally:
         client.close()
 
 
 # ─── Main loop ──────────────────────────────────────────────────────────────
 
-def main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Arena PokerKit L1 agent")
-    parser.add_argument("--competition-id", default=None,
-                        help="Benchmark competition ID (else ARENA_COMPETITION_ID)")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="In-process mock loop; never hits the network")
-    parser.add_argument("--max-hands", type=int, default=0,
-                        help="Stop after N hands (0 = run until completed)")
-    parser.add_argument("--handle", default="pokerkit-starter",
-                        help="Agent handle for first registration")
-    parser.add_argument("--name", default="PokerKit Starter",
-                        help="Agent display name for first registration")
-    parser.add_argument("--quote", default="probability over swagger",
-                        help="Agent quote shown on the leaderboard")
-    args = parser.parse_args(argv)
+def run_live_benchmark(args: argparse.Namespace,
+                       decide_fn: Optional[Any] = None) -> int:
+    """Live Poker Eval loop — matches the live poker-eval skill verbatim:
+       benchmark/start → loop(pending-actions → action; periodic
+       benchmark/status for terminal detection).
 
-    if args.dry_run:
-        return run_mock_benchmark(args)
-
+    decide_fn lets the L2 caller inject llm_decide. Defaults to L1 decide."""
     load_dotenv()
     api_key = os.environ.get("ARENA_API_KEY") or None
     base = os.environ.get("ARENA_API_BASE", DEFAULT_BASE)
@@ -617,56 +839,76 @@ def main(argv: Optional[list[str]] = None) -> int:
               file=sys.stderr)
         return 2
 
+    decide_fn = decide_fn or decide
+
     client = ArenaClient(base, api_key=api_key)
     state = load_state()
 
     try:
-        # 1. Register (idempotent).
+        # 1. Register / verify creds.
         creds = load_or_register(client, args.handle, args.name, args.quote)
-        agent_id = creds.get("agentId") or "?"
+        agent_id = creds.get("agentId") or creds.get("id") or "?"
         print(f"[arena-pokerkit] registered agent={agent_id} base={base}")
 
-        # 2. Start benchmark.
+        # 2. Introspect — fail loud if the API moved.
+        schema = fetch_introspection(client)
+        assert_endpoints(schema)
+        terminal_phases, terminal_statuses = resolve_terminal_phases(schema)
+        print(f"[arena-pokerkit] introspection OK | "
+              f"terminal phases={sorted(terminal_phases)} | "
+              f"statuses={sorted(terminal_statuses)}")
+
+        # 3. Start benchmark.
         try:
-            status = client.post("/texas/benchmark/start",
-                                 {"competitionId": competition_id})
+            start_resp = client.post("/texas/benchmark/start",
+                                     {"competitionId": competition_id})
         except ArenaError as e:
             if e.status == 402:
                 print("[arena-pokerkit] competition has entry fee — pay manually or "
                       "pick a free competition", file=sys.stderr)
                 return 3
             raise
-        if not isinstance(status, dict):
-            raise ArenaError(0, str(status)[:200], "benchmark/start malformed")
-        match = status.get("match") or {}
+        if not isinstance(start_resp, dict):
+            raise ArenaError(0, str(start_resp)[:200], "benchmark/start malformed")
+        match = start_resp.get("match") or {}
+        if match.get("phase") in terminal_phases or match.get("status") in terminal_statuses:
+            print(f"[arena-pokerkit] benchmark already terminal: phase={match.get('phase')} "
+                  f"summary={json.dumps(match, sort_keys=True)}")
+            return 0
         print(f"[arena-pokerkit] benchmark started: phase={match.get('phase')} "
               f"target={match.get('targetHands')}")
 
-        # 3. Poll loop.
+        # 4. Main loop: pending-actions primary, status secondary.
         rng = random.Random()
         hands_acted = 0
+        last_status_at = 0.0  # force one status check up front
+
         while True:
-            status = client.get(
-                f"/texas/benchmark/status?competitionId={competition_id}")
-            if not isinstance(status, dict):
-                raise ArenaError(0, str(status)[:200], "benchmark/status malformed")
-            match = status.get("match") or {}
-            phase = match.get("phase")
-            if phase == "completed":
-                score = match.get("adjustedBbPer100")
-                print(f"[arena-pokerkit] match completed | hands="
-                      f"{match.get('completedHands')} | adjustedBbPer100={score}")
-                state["bankroll"] = int(match.get("rawChipDelta") or 0)
-                save_state(state)
-                return 0
-            if phase in ("cancelled", "failed"):
-                print(f"[arena-pokerkit] match {phase}", file=sys.stderr)
-                return 4
-            if phase == "waiting_user" and status.get("table"):
-                table = status["table"]
+            tables = None
+            try:
+                pending = client.get(
+                    f"/texas/pending-actions?competitionId={competition_id}")
+                if isinstance(pending, dict):
+                    raw = pending.get("tables") or []
+                    tables = sorted(raw,
+                                    key=lambda t: (t.get("actionDeadlineAt") or 0))
+            except ArenaError as e:
+                # 404 here is fatal — introspection said it should exist.
+                print(f"[arena-pokerkit] pending-actions error: {e}", file=sys.stderr)
+                if e.status in (404, 401, 403):
+                    raise
+
+            if tables:
+                table = tables[0]
                 deadline_ms = table.get("actionDeadlineAt") or 0
-                deadline_s = max(0.0, (deadline_ms / 1000.0) - time.time()) if deadline_ms else 10.0
-                action = decide(table, deadline_s=deadline_s)
+                deadline_s = (max(0.0, (deadline_ms / 1000.0) - time.time())
+                              if deadline_ms else 10.0)
+                research_context = retrieve_solver_context(table)
+                try:
+                    action = decide_fn(table, deadline_s=deadline_s,
+                                       research_context=research_context)
+                except TypeError:
+                    action = decide_fn(table, deadline_s=deadline_s)
                 payload = {"tableId": table["tableId"], **action}
                 try:
                     client.post("/texas/action", payload)
@@ -682,20 +924,17 @@ def main(argv: Optional[list[str]] = None) -> int:
                     if e.status == 409:
                         state["stale_count"] = state.get("stale_count", 0) + 1
                         save_state(state)
-                        # stale table — re-poll
-                        time.sleep(0.5)
+                        # stale table — re-poll immediately, do not re-submit
                         continue
                     if e.status == 400:
                         state["rejection_count"] = state.get("rejection_count", 0) + 1
                         save_state(state)
-                        # illegal action — fall back to fold
                         try:
                             client.post("/texas/action", {
                                 "tableId": table["tableId"],
                                 "action": "fold",
                                 "message": "fallback after illegal action",
-                                "reasoning": '{vr: "ln:unknown", ke: "0% eq", '
-                                             'bf: [], pp: "fallback"}',
+                                "reasoning": _FALLBACK_REASONING,
                             })
                         except ArenaError:
                             pass
@@ -704,11 +943,59 @@ def main(argv: Optional[list[str]] = None) -> int:
                 if args.max_hands and hands_acted >= args.max_hands:
                     print(f"[arena-pokerkit] hit --max-hands={args.max_hands}, stopping")
                     return 0
-            else:
-                # queued or panel_acting — wait briefly.
+                # After acting, fall through to the next loop iteration.
+
+            # Periodic status refresh + terminal detection.
+            now = time.time()
+            if (not tables) or (now - last_status_at >= STATUS_REFRESH_S):
+                try:
+                    status = client.get(
+                        f"/texas/benchmark/status?competitionId={competition_id}")
+                except ArenaError as e:
+                    print(f"[arena-pokerkit] status refresh error: {e}",
+                          file=sys.stderr)
+                    status = None
+                last_status_at = now
+                if isinstance(status, dict):
+                    match = status.get("match") or {}
+                    phase = match.get("phase")
+                    msstatus = match.get("status")
+                    if phase in terminal_phases or msstatus in terminal_statuses:
+                        print(f"[arena-pokerkit] match terminal ({phase}/{msstatus}) | "
+                              f"hands={match.get('completedHands')} | "
+                              f"adjustedBbPer100={match.get('adjustedBbPer100')}")
+                        # Preserve unknown fields with a full dump.
+                        print(f"[arena-pokerkit] match summary: "
+                              f"{json.dumps(match, sort_keys=True)}")
+                        state["bankroll"] = int(match.get("rawChipDelta") or 0)
+                        save_state(state)
+                        return 0
+
+            if not tables:
                 time.sleep(POLL_INTERVAL + rng.uniform(-POLL_JITTER, POLL_JITTER))
     finally:
         client.close()
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    parser = argparse.ArgumentParser(description="Arena PokerKit L1 agent")
+    parser.add_argument("--competition-id", default=None,
+                        help="Benchmark competition ID (else ARENA_COMPETITION_ID)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="In-process mock loop; never hits the network")
+    parser.add_argument("--max-hands", type=int, default=0,
+                        help="Stop after N hands (0 = run until terminal)")
+    parser.add_argument("--handle", default="pokerkit-starter",
+                        help="Agent handle for first registration")
+    parser.add_argument("--name", default="PokerKit Starter",
+                        help="Agent display name for first registration")
+    parser.add_argument("--quote", default="probability over swagger",
+                        help="Agent quote shown on the leaderboard")
+    args = parser.parse_args(argv)
+
+    if args.dry_run:
+        return run_mock_benchmark(args)
+    return run_live_benchmark(args)
 
 
 if __name__ == "__main__":

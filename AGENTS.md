@@ -6,46 +6,69 @@ opens this repository.
 ## Purpose
 
 This repo is a starter kit for builders who want to ship a poker agent
-to **dev.fun Arena PVE Benchmark mode**. The kit registers, opens a
-benchmark match against a fixed reference panel of 5 DeepCFR bots,
-polls for turns, and submits legal actions until the match ends.
+to **dev.fun Arena Poker Eval Benchmark mode**. The kit registers,
+opens a benchmark match against a fixed reference panel of DeepCFR bots,
+polls `/texas/pending-actions` for turns, and submits legal actions
+until the match ends.
 
 ## Critical facts (do not deviate)
 
-- **Mode is PVE Benchmark, not PVP lobby.** Use
-  `POST /texas/benchmark/start` + `GET /texas/benchmark/status`, never
-  `POST /texas/join`.
+- **Mode is Poker Eval Benchmark, not PVP lobby.** Use
+  `POST /texas/benchmark/start` to enter, and
+  `GET /texas/pending-actions` as the primary action poll — never
+  `POST /texas/join` (that's the lobby route).
+- **Loop matches the live poker-eval skill verbatim**:
+  ```
+  benchmark/start → loop:
+      GET /texas/pending-actions   (tight, returns tables[] when YOUR turn)
+      POST /texas/action            (submit decision with required reasoning)
+      GET /texas/benchmark/status   (periodic refresh + terminal detection)
+  ```
+- **Introspect at startup.** Call `GET /__introspection` after auth and
+  verify every endpoint we plan to use is present (`REQUIRED_ENDPOINTS`
+  in `examples/agent.py`). Read terminal phase/status enums from the
+  schema — do NOT hardcode `{"completed","cancelled","failed"}`.
 - **`reasoning` field is required on benchmark actions.** YAML flow
   style, max 150 characters. Format:
   `{vr: "<range>", ke: "<num+unit>", bf: [<features>], pp: "<plan>", sr: "<size reason>"}`
-- **Phases are `queued -> panel_acting -> waiting_user -> completed`.**
-  The agent only submits when `match.phase == "waiting_user"` and a
-  `table` object is present.
+  Build capped field values first; if the serialized object exceeds
+  150 chars, fall back to a known-valid short object — never blind-slice.
 - **`amount` semantics = total chips committed on this street after
   acting**, not the increment.
-- **Never hardcode API field names.** `GET /__introspection` is the
-  live source of truth. For this kit we copy field names from the
-  TypeBox schemas as of build time, but production agents should
-  re-fetch introspection at session start.
-- **Auth header**: `x-arena-api-key: <apiKey>`. Never log it.
-- **Poll interval ~2s with jitter.** Tables auto-fold on timeout.
+- **Auth header**: `x-arena-api-key: <apiKey>`. Never log it. After
+  loading cached credentials, verify with `GET /agent/me`; on 401/403
+  discard and re-register.
+- **Pending-actions poll**: ~1s with jitter. Tables auto-fold on
+  timeout, so sort by earliest `actionDeadlineAt` and act on the
+  freshest pending table.
 
 ## File map
 
 - `examples/agent.py` — L1 heuristic agent. The decision logic
   builders edit lives in `decide()`. Everything above and below
-  `decide()` is glue (HTTP client, registration, polling, state).
+  `decide()` is glue (HTTP client, registration, introspection,
+  polling, state).
 - `examples/llm_agent.py` — L2 starter. Same loop, but `decide()`
   delegates to Anthropic Claude. Falls back to the L1 heuristic on
-  parse failure or timeout.
+  parse failure or timeout. `--dry-run --mock-llm` exercises
+  `llm_decide()` end-to-end without network or Anthropic credits.
 - `examples/prompt.md` — copy-paste prompt for any coding agent that
   can read markdown and call HTTP.
 - `docs/play.md` — verbose onboarding doc, end-to-end credentials and
   game flow.
-- `docs/strategy.md` — three-tier strategy guide (L1 / L2 / L3).
+- `docs/strategy.md` — three-tier strategy guide (L1 / L2 / L3) plus
+  the **Auto Research** hook.
 - `pyproject.toml` — uv-managed. Required deps: httpx, python-dotenv,
   treys, pokerkit. Optional: `[llm]` -> anthropic, `[dev]` -> pytest,
   respx.
+
+## Auto Research hook
+
+`examples/agent.py` exposes `retrieve_solver_context(table) -> dict`,
+called immediately before `decide(table)` on every fresh pending table.
+Default is a no-op. Override it to plug in preflop GTO charts,
+postflop solver retrieval, or opponent style HUD pulled from
+`/texas/agent-stats`. See `docs/strategy.md` for the L2/L3 patterns.
 
 ## Testing
 
@@ -54,18 +77,18 @@ public starter but used in CI). For local verification, mock the
 endpoints with `respx`:
 
 - `POST /auth/register`
-- `POST /texas/benchmark/start`
-- `GET  /texas/benchmark/status`  ← returns `table` directly in benchmark mode
-- `POST /texas/action`
+- `GET  /agent/me`
 - `GET  /__introspection`
-
-There is no `/texas/pending-actions` call in the benchmark loop. The
-status endpoint embeds the live table when it is your turn.
+- `POST /texas/benchmark/start`
+- `GET  /texas/pending-actions`  ← primary action poll
+- `POST /texas/action`
+- `GET  /texas/benchmark/status`  ← periodic terminal check
 
 Run `examples/agent.py --dry-run` to use the built-in in-process mock
 loop without network access. `--dry-run` wires an `httpx.MockTransport`
-into the client so the full happy path (register → benchmark/start →
-status × N → action) runs end-to-end with zero outbound traffic.
+into the client so the full happy path (register → introspect →
+benchmark/start → pending-actions × N → action → status terminal)
+runs end-to-end with zero outbound traffic.
 
 ## When editing `decide()`
 
@@ -78,7 +101,8 @@ You only need to look at `examples/agent.py`. Everything outside
 - `table["allowedActions"]["betRange"]` — `{min, max}` or `null`
 - `table["potChips"]`, `table["boardCards"]`, `table["seats"]`
 - `table["selfSeatNumber"]` (use to find your seat in `seats`)
-- `table.get("secondsUntilDeadline", 10)` — synthesized client-side
+- `table["actionDeadlineAt"]` — epoch ms; the runner converts to seconds
+- `research_context` — dict from `retrieve_solver_context()` (default `{}`)
 
 Return: `{"action": str, "amount": int?, "message": str, "reasoning": str}`.
 `reasoning` must be YAML flow style under 150 chars.

@@ -1,8 +1,9 @@
 """Arena PokerKit — L2 LLM agent.
 
-Same end-to-end loop as agent.py, but decide() delegates to Anthropic
-Claude. Falls back to the L1 heuristic on any parse failure, timeout,
-or missing API key.
+Same end-to-end loop as agent.py (pending-actions → decide → action,
+periodic benchmark/status terminal check), but decide() delegates to
+Anthropic Claude. Falls back to the L1 heuristic on any parse failure,
+timeout, or missing API key.
 
 Cost estimate: ~$0.02 per decision with Claude Sonnet 4.x at default
 sizing. Run a small benchmark before pointing this at long matches.
@@ -10,6 +11,7 @@ sizing. Run a small benchmark before pointing this at long matches.
 CLI:
     uv run examples/llm_agent.py
     uv run examples/llm_agent.py --dry-run        # mock loop, no network
+    uv run examples/llm_agent.py --dry-run --mock-llm   # mock loop, mocked LLM
     uv run examples/llm_agent.py --model haiku    # cheaper / faster
 """
 from __future__ import annotations
@@ -18,25 +20,15 @@ import argparse
 import json
 import os
 import sys
-import time
 from typing import Any, Optional
-
-from dotenv import load_dotenv
 
 # Reuse the L1 plumbing.
 from agent import (  # type: ignore
-    ArenaClient,
-    ArenaError,
-    MOCK_BASE,
-    DEFAULT_BASE,
-    POLL_INTERVAL,
-    POLL_JITTER,
     _build_reasoning,
     decide as heuristic_decide,
-    load_or_register,
-    load_state,
+    retrieve_solver_context,
+    run_live_benchmark,
     run_mock_benchmark,
-    save_state,
 )
 
 
@@ -65,25 +57,86 @@ Rules:
 """
 
 
+# ─── Mock LLM (for --dry-run --mock-llm) ────────────────────────────────────
+
+class _MockLLMResponse:
+    def __init__(self, text: str) -> None:
+        class _Block:
+            def __init__(self, t: str) -> None:
+                self.type = "text"
+                self.text = t
+        self.content = [_Block(text)]
+
+
+class _MockAnthropic:
+    """Drop-in stand-in for anthropic.Anthropic that always returns a
+    parseable JSON action. Used by --mock-llm to exercise the parse +
+    validate path without real network calls."""
+
+    def __init__(self, *_, **__) -> None:
+        self.messages = self
+
+    def create(self, **kwargs) -> _MockLLMResponse:
+        # Return a payload that exercises _parse_action_json + _validate_against_allowed.
+        text = json.dumps({
+            "action": "call",
+            "message": "mock LLM says call for pot odds",
+            "reasoning": '{vr: "std", ke: "55% eq", bf: [dry], pp: "IP call", sr: "po 25% covered"}',
+        })
+        return _MockLLMResponse(text)
+
+
+_MOCK_LLM = False
+
+
+def _maybe_mock_anthropic_module():
+    """If --mock-llm is set, monkey-patch the anthropic SDK before llm_decide
+    imports it. Returns a usable stand-in module."""
+    if not _MOCK_LLM:
+        return None
+    class _Mod:
+        Anthropic = _MockAnthropic
+    return _Mod()
+
+
 def llm_decide(table: dict, deadline_s: float = 10.0,
                model: str = "claude-sonnet-4-5",
-               max_tokens: int = 800) -> dict:
-    """Ask Claude for an action. Fall back to heuristic on any failure."""
-    try:
-        import anthropic
-    except ImportError:
-        return heuristic_decide(table, deadline_s=deadline_s)
+               max_tokens: int = 800,
+               research_context: Optional[dict] = None) -> dict:
+    """Ask Claude for an action. Fall back to heuristic on any failure.
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return heuristic_decide(table, deadline_s=deadline_s)
+    research_context is the dict returned by retrieve_solver_context(table)
+    — preflop chart, postflop solver frequencies, opponent stats. When
+    non-empty, it's serialized into the user prompt as extra context."""
+    mock_mod = _maybe_mock_anthropic_module()
+    if mock_mod is not None:
+        anthropic = mock_mod  # type: ignore
+    else:
+        try:
+            import anthropic  # type: ignore
+        except ImportError:
+            return heuristic_decide(table, deadline_s=deadline_s,
+                                    research_context=research_context)
+
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            return heuristic_decide(table, deadline_s=deadline_s,
+                                    research_context=research_context)
 
     if deadline_s < 3.0:
         # Not enough time for an LLM round-trip; use the local heuristic.
-        return heuristic_decide(table, deadline_s=deadline_s)
+        return heuristic_decide(table, deadline_s=deadline_s,
+                                research_context=research_context)
 
-    client = anthropic.Anthropic(api_key=api_key)
+    if mock_mod is not None:
+        client = anthropic.Anthropic()
+    else:
+        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+
     prompt = "TABLE STATE:\n" + json.dumps(_compact_table(table), separators=(",", ":"))
+    if research_context:
+        prompt += ("\n\nAUTO-RESEARCH CONTEXT:\n"
+                   + json.dumps(research_context, separators=(",", ":")))
     prompt += "\n\nRespond with ONLY the JSON action object on the last line."
 
     try:
@@ -99,7 +152,8 @@ def llm_decide(table: dict, deadline_s: float = 10.0,
         ).strip()
         action = _parse_action_json(text)
         if action is None:
-            return heuristic_decide(table, deadline_s=deadline_s)
+            return heuristic_decide(table, deadline_s=deadline_s,
+                                    research_context=research_context)
         action = _validate_against_allowed(action, table)
         # Validate reasoning shape — blind truncation can produce invalid
         # YAML flow and get rejected by the benchmark server.
@@ -113,7 +167,8 @@ def llm_decide(table: dict, deadline_s: float = 10.0,
             )
         return action
     except Exception:
-        return heuristic_decide(table, deadline_s=deadline_s)
+        return heuristic_decide(table, deadline_s=deadline_s,
+                                research_context=research_context)
 
 
 def _compact_table(table: dict) -> dict:
@@ -166,7 +221,6 @@ def _strip_code_fences(text: str) -> str:
     s = text.strip()
     if not s.startswith("```"):
         return s
-    # Drop opening fence + optional language tag line.
     nl = s.find("\n")
     if nl >= 0:
         s = s[nl + 1:]
@@ -174,7 +228,6 @@ def _strip_code_fences(text: str) -> str:
         s = s.lstrip("`")
         if s.lower().startswith("json"):
             s = s[4:]
-    # Drop closing fence.
     if s.rstrip().endswith("```"):
         s = s.rstrip()[: -3]
     return s.strip()
@@ -231,7 +284,6 @@ def _parse_action_json(text: str) -> Optional[dict]:
         return None
     if "action" not in obj or "message" not in obj or "reasoning" not in obj:
         return None
-    # Truncate message; reasoning is validated separately by the caller.
     obj["message"] = str(obj["message"])[:500]
     obj["reasoning"] = str(obj["reasoning"])
     return obj
@@ -243,7 +295,6 @@ def _validate_against_allowed(action: dict, table: dict) -> dict:
     available = set(allowed.get("availableActions") or [])
     name = action.get("action")
     if name not in available:
-        # LLM hallucinated — degrade to check or fold.
         if "check" in available:
             action["action"] = "check"
             action.pop("amount", None)
@@ -254,7 +305,6 @@ def _validate_against_allowed(action: dict, table: dict) -> dict:
     if name in ("fold", "check", "call"):
         action.pop("amount", None)
         return action
-    # bet / raise / all-in
     amount = int(action.get("amount") or 0)
     if name == "bet":
         rng = allowed.get("betRange") or {}
@@ -271,9 +321,14 @@ def _validate_against_allowed(action: dict, table: dict) -> dict:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    global _MOCK_LLM
     parser = argparse.ArgumentParser(description="Arena PokerKit L2 LLM agent")
     parser.add_argument("--competition-id", default=None)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--mock-llm", action="store_true",
+                        help="Use an in-memory mock LLM so --dry-run actually "
+                             "exercises llm_decide() instead of falling back "
+                             "to the heuristic.")
     parser.add_argument("--max-hands", type=int, default=0)
     parser.add_argument("--model", default="claude-sonnet-4-5")
     parser.add_argument("--handle", default="pokerkit-llm")
@@ -281,96 +336,18 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--quote", default="thinking out loud")
     args = parser.parse_args(argv)
 
+    _MOCK_LLM = bool(args.mock_llm)
+
+    # Bind model into llm_decide via a small closure so the runner can
+    # call decide_fn(table, deadline_s, research_context=...).
+    def _decide(table: dict, deadline_s: float = 10.0,
+                research_context: Optional[dict] = None) -> dict:
+        return llm_decide(table, deadline_s=deadline_s, model=args.model,
+                          research_context=research_context)
+
     if args.dry_run:
-        return run_mock_benchmark(args)
-
-    load_dotenv()
-    api_key = os.environ.get("ARENA_API_KEY") or None
-    base = os.environ.get("ARENA_API_BASE", DEFAULT_BASE)
-    competition_id = args.competition_id or os.environ.get("ARENA_COMPETITION_ID")
-    if not competition_id:
-        print("ERROR: --competition-id or ARENA_COMPETITION_ID is required",
-              file=sys.stderr)
-        return 2
-
-    client = ArenaClient(base, api_key=api_key)
-    state = load_state()
-
-    try:
-        creds = load_or_register(client, args.handle, args.name, args.quote)
-        print(f"[arena-pokerkit-llm] registered agent={creds.get('agentId', '?')}")
-
-        try:
-            status = client.post("/texas/benchmark/start",
-                                 {"competitionId": competition_id})
-        except ArenaError as e:
-            if e.status == 402:
-                print("[arena-pokerkit-llm] entry fee required — skip", file=sys.stderr)
-                return 3
-            raise
-        if not isinstance(status, dict):
-            raise ArenaError(0, str(status)[:200], "benchmark/start malformed")
-        print(f"[arena-pokerkit-llm] phase={status.get('match', {}).get('phase')}")
-
-        import random as _r
-        rng = _r.Random()
-        acted = 0
-        while True:
-            status = client.get(
-                f"/texas/benchmark/status?competitionId={competition_id}")
-            if not isinstance(status, dict):
-                raise ArenaError(0, str(status)[:200], "benchmark/status malformed")
-            match = status.get("match") or {}
-            phase = match.get("phase")
-            if phase == "completed":
-                print(f"[arena-pokerkit-llm] done | adjustedBbPer100="
-                      f"{match.get('adjustedBbPer100')}")
-                return 0
-            if phase in ("cancelled", "failed"):
-                print(f"[arena-pokerkit-llm] {phase}", file=sys.stderr)
-                return 4
-            if phase == "waiting_user" and status.get("table"):
-                table = status["table"]
-                deadline_ms = table.get("actionDeadlineAt") or 0
-                deadline_s = max(0.0, (deadline_ms / 1000.0) - time.time()) if deadline_ms else 10.0
-                action = llm_decide(table, deadline_s=deadline_s, model=args.model)
-                payload = {"tableId": table["tableId"], **action}
-                try:
-                    client.post("/texas/action", payload)
-                    acted += 1
-                    state["hands_played"] = state.get("hands_played", 0) + 1
-                    save_state(state)
-                except ArenaError as e:
-                    if e.status == 409:
-                        # Stale table — re-poll; do NOT re-submit against the
-                        # same tableId, server has moved on.
-                        state["stale_count"] = state.get("stale_count", 0) + 1
-                        save_state(state)
-                        time.sleep(0.5)
-                        continue
-                    if e.status == 400:
-                        # Illegal action — fall back to safe heuristic fold.
-                        state["rejection_count"] = state.get("rejection_count", 0) + 1
-                        save_state(state)
-                        try:
-                            client.post("/texas/action", {
-                                "tableId": table["tableId"],
-                                "action": "fold",
-                                "message": "fallback after illegal action",
-                                "reasoning": '{vr: "ln:unknown", ke: "0% eq", '
-                                             'bf: [], pp: "fallback"}',
-                            })
-                        except ArenaError:
-                            pass
-                        continue
-                    raise
-                if args.max_hands and acted >= args.max_hands:
-                    print(f"[arena-pokerkit-llm] hit --max-hands")
-                    return 0
-            else:
-                time.sleep(POLL_INTERVAL + rng.uniform(-POLL_JITTER, POLL_JITTER))
-    finally:
-        client.close()
+        return run_mock_benchmark(args, decide_fn=_decide)
+    return run_live_benchmark(args, decide_fn=_decide)
 
 
 if __name__ == "__main__":

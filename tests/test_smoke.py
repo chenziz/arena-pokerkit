@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "examples"))
 
 import agent as agent_mod  # noqa: E402
+import arena_client as arena_client_mod  # noqa: E402
 
 
 MOCK_BASE = "http://mock.local/api/arena"
@@ -356,5 +357,5 @@ def test_introspection_missing_endpoints_fails_loud():
         {"method": "POST", "path": "/api/arena/auth/register", "auth": False},
     ]}
     with pytest.raises(SystemExit) as exc:
-        agent_mod.assert_endpoints(schema)
+        arena_client_mod.assert_endpoints(schema)
     assert "missing endpoint" in str(exc.value)

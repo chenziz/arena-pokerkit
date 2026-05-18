@@ -2,6 +2,23 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] — 2026-05-18
+
+### Added
+- Status heartbeat in live + dry-run loop (`phase / completedHands / adjustedBbPer100 / pending`)
+- `examples/research_static_chart.py` — runnable Auto Research example (preflop chart, no network)
+- `--dry-run-scenario {instant,queued,stale}` CLI flag for dry-run path coverage
+- README expected-output block, file map, and "local files created" note
+- HF eval README: "How to read this" interpretation guide
+
+### Changed
+- `examples/agent.py` split (~1000 → ~340 lines) into:
+  - `agent.py` — decide / equity / Auto Research hook (the file builders edit)
+  - `arena_client.py` — HTTP client, introspection, credentials
+  - `mock.py` — dry-run scaffolding (only loaded when `--dry-run`)
+- Friendlier `.env` / `--competition-id` missing error with recovery commands
+- Bumped to `version = "0.3.0"`
+
 ## [0.2.0] — 2026-05-18
 
 ### Added

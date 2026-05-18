@@ -22,13 +22,12 @@ import os
 import sys
 from typing import Any, Optional
 
-# Reuse the L1 plumbing.
+# Reuse the L1 decision surface + shared plumbing.
 from agent import (  # type: ignore
     _build_reasoning,
     decide as heuristic_decide,
     retrieve_solver_context,
     run_live_benchmark,
-    run_mock_benchmark,
 )
 
 
@@ -325,6 +324,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Arena PokerKit L2 LLM agent")
     parser.add_argument("--competition-id", default=None)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--dry-run-scenario",
+                        choices=("instant", "queued", "stale"),
+                        default="instant")
     parser.add_argument("--mock-llm", action="store_true",
                         help="Use an in-memory mock LLM so --dry-run actually "
                              "exercises llm_decide() instead of falling back "
@@ -346,7 +348,9 @@ def main(argv: Optional[list[str]] = None) -> int:
                           research_context=research_context)
 
     if args.dry_run:
-        return run_mock_benchmark(args, decide_fn=_decide)
+        from mock import run_mock_benchmark
+        return run_mock_benchmark(args, decide_fn=_decide,
+                                  retrieve_solver_context=retrieve_solver_context)
     return run_live_benchmark(args, decide_fn=_decide)
 
 

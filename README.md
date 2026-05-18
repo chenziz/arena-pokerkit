@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-3776ab)](pyproject.toml)
-[![Version](https://img.shields.io/badge/version-0.2.0-success)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0-success)](CHANGELOG.md)
 
 Build a poker agent for dev.fun Arena. Register, introspect, start a
 benchmark, poll pending actions, submit legal actions.
@@ -36,11 +36,29 @@ Smoke-test the loop without network access:
 
     uv run examples/agent.py --dry-run --max-hands 1
 
+Expected output (success looks like this):
+
+```
+[arena-pokerkit] (dry-run, scenario=instant) registered agent=agent_dry base=http://mock.local/api/arena
+[arena-pokerkit] (dry-run) benchmark started: phase=queued target=1
+[arena-pokerkit] phase=completed | completedHands=1/1 | adjustedBbPer100=10.0 | pending=0
+[arena-pokerkit] (dry-run) match terminal (completed/Completed) | hands=1 | adjustedBbPer100=10.0
+[arena-pokerkit] (dry-run) decided action=raise amount=398 reasoning='{vr: "ln:unknown", ke: "92% eq", bf: [dry], pp: "OOP barrel T", sr: "po 25% sized for FE"}'
+```
+
+Other dry-run scenarios (`--dry-run-scenario`):
+`instant` (default) | `queued` (panel_acting warmup) | `stale` (first action 409).
+
 `--dry-run` wires an in-process `httpx.MockTransport` over the same
 endpoints (`/auth/register`, `/__introspection`,
 `/texas/benchmark/start`, `/texas/pending-actions`, `/texas/action`,
 `/texas/benchmark/status`) so the happy path runs end-to-end with no
 outbound traffic.
+
+Files your agent creates locally (do not commit — already gitignored):
+
+    .arena-credentials   # API key after first /auth/register — keep private
+    .arena-poker-state   # rolling stats; safe to delete to reset
 
 ## Offline practice
 
@@ -57,6 +75,20 @@ Eval S3 scores you on its own on-server flow, not against this file.
 
 Skip the Python reference. Paste `examples/prompt.md` into Claude Code,
 Codex, Hermes, OpenClaw, or any agent that reads markdown and calls HTTP.
+
+## File map
+
+```
+examples/agent.py                ← edit decide() here (L1 heuristic)
+examples/arena_client.py         ← HTTP client + introspection + creds (rarely touch)
+examples/mock.py                 ← --dry-run scaffolding (rarely touch)
+examples/llm_agent.py            ← L2 LLM-driven agent (Claude SDK)
+examples/research_static_chart.py ← runnable Auto Research example (preflop chart)
+examples/prompt.md               ← paste into any coding agent
+docs/strategy.md                 ← L1/L2/L3 + Auto Research
+docs/play.md                     ← Arena game flow + credentials
+tests/test_smoke.py              ← uv run pytest tests/
+```
 
 ## How it works
 
@@ -97,7 +129,8 @@ approaches: heuristic, LLM-in-the-loop, and trained weights.
 | L3 | Trained weights | 1 week | DeepCFR, CFR+, NFSP, solver lookup |
 
 Each tier can plug an Auto Research layer (preflop chart, postflop
-solver, opponent stats) in front of `decide()`. See `docs/strategy.md`.
+solver, opponent stats) in front of `decide()`. A runnable example
+ships at `examples/research_static_chart.py`. See `docs/strategy.md`.
 
 ## What's next
 

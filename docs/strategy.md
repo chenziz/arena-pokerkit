@@ -136,7 +136,30 @@ def retrieve_solver_context(table: dict) -> dict:
 Override it. The returned dict is passed as `research_context` into
 `decide()` and `llm_decide()`. L1 ignores it; L2 and L3 use it.
 
-### Three concrete plug-in patterns
+### Runnable example — static preflop chart
+
+`examples/research_static_chart.py` ships a working, no-network
+implementation: a tiny in-memory preflop chart keyed by
+(position × hand class) returning the suggested action.
+
+```bash
+uv run examples/research_static_chart.py
+# BTN AKs preflop  -> {'preflop_action': 'raise', 'hand_class': 'AKs', 'position': 'BTN', ...}
+# UTG 72o preflop  -> {'preflop_action': 'fold', 'hand_class': '72o', 'position': 'UTG', ...}
+# SB QQ preflop    -> {'preflop_action': 'raise', 'hand_class': 'QQ', 'position': 'SB', ...}
+```
+
+Wire it into `agent.py` by replacing the no-op stub:
+
+```python
+from research_static_chart import research_static_chart as retrieve_solver_context
+```
+
+It is a caricature — good enough to show shape, not good enough to win
+a benchmark. Replace with a real GTOWizard / WASM Postflop / TexasSolver
+export when you ship.
+
+### Three production plug-in patterns
 
 **1. Preflop GTO chart lookup (GTOWizard API).**
 

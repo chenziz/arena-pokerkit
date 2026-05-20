@@ -57,8 +57,8 @@ except Exception:  # pragma: no cover
     _HAS_TREYS = False
 
 
-POLL_INTERVAL = 1.0        # tight pending-actions poll
-POLL_JITTER = 0.3
+POLL_INTERVAL = 1.0        # tight pending-actions poll (halved from 2.0 in 0.3.2)
+POLL_JITTER = 0.5
 STATUS_REFRESH_S = 8.0      # background refresh of benchmark/status
 
 
@@ -385,12 +385,33 @@ def _validate_pending_tables(pending: Any) -> list[dict]:
 
 
 def _emit_heartbeat(phase: Any, completed: Any, target: Any, score: Any,
-                    pending_count: int, label: str = "") -> None:
+                    pending_count: int, label: str = "",
+                    eta_str: str = "") -> None:
     prefix = f"[arena-pokerkit{label}]"
     print(f"{prefix} phase={phase} | "
           f"completedHands={completed}/{target} | "
           f"adjustedBbPer100={score} | "
-          f"pending={pending_count}")
+          f"pending={pending_count}{eta_str}")
+
+
+def _compute_eta(start_time: float, hands_done: Any, target: Any) -> str:
+    """ETA string built from observed per-hand wall-clock speed. Returns
+    empty string if we don't have enough signal yet (hands_done<=0 or
+    target<=0 / non-numeric)."""
+    try:
+        hd = int(hands_done or 0)
+        tgt = int(target or 0)
+    except (TypeError, ValueError):
+        return ""
+    if hd <= 0 or tgt <= 0 or tgt <= hd:
+        return ""
+    elapsed = time.monotonic() - start_time
+    if elapsed <= 0:
+        return ""
+    rate_s_per_hand = elapsed / hd
+    remaining = tgt - hd
+    eta_s = int(remaining * rate_s_per_hand)
+    return f" | ETA {eta_s // 60}m{eta_s % 60:02d}s"
 
 
 def _attempt_credential_repair(client: ArenaClient, args: argparse.Namespace) -> bool:
@@ -430,12 +451,13 @@ def _run_benchmark_loop(
     last_heartbeat_at = 0.0
     first_heartbeat_done = False
     credential_repair_used = False
+    loop_start_monotonic = time.monotonic()
 
     # P2-4: emit a heartbeat BEFORE the first decide() call so live mode
     # shows immediate signs of life. We don't know phase yet; print zeros.
     _emit_heartbeat(phase="(starting)", completed=0,
                     target=args.max_hands or "?", score=None,
-                    pending_count=0, label=label)
+                    pending_count=0, label=label, eta_str="")
     last_heartbeat_at = time.time()
     first_heartbeat_done = True
 
@@ -539,6 +561,11 @@ def _run_benchmark_loop(
             if isinstance(status, dict):
                 match = status.get("match") or {}
                 if now - last_heartbeat_at >= 5.0:
+                    eta_str = _compute_eta(
+                        loop_start_monotonic,
+                        match.get("completedHands"),
+                        match.get("targetHands"),
+                    )
                     _emit_heartbeat(
                         phase=match.get("phase"),
                         completed=match.get("completedHands"),
@@ -546,6 +573,7 @@ def _run_benchmark_loop(
                         score=match.get("adjustedBbPer100"),
                         pending_count=len(tables),
                         label=label,
+                        eta_str=eta_str,
                     )
                     last_heartbeat_at = now
                 phase = match.get("phase")
@@ -580,9 +608,9 @@ def run_live_benchmark(args: argparse.Namespace,
         print(
             "ERROR: no competition specified.\n\n"
             "Either:\n"
-            "  cp .env.example .env       # has Poker Eval S3 ID pre-filled\n"
+            "  cp .env.example .env       # has Poker Eval S5 ID pre-filled\n"
             "or:\n"
-            "  uv run examples/agent.py --competition-id cmpaf53w90005w6o1mc8vqk2k",
+            "  uv run examples/agent.py --competition-id cmpdk0pt00eawvcaf1es8plw2",
             file=sys.stderr,
         )
         return 2

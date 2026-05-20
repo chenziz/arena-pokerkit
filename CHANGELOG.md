@@ -2,6 +2,15 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.2] — 2026-05-18
+
+### Changed
+- Default competition switched from Poker Eval S3 (5000 hands, ~2h) to Poker Eval S5 (500 hands, ~70 min) — 10× wall-clock improvement
+- Quickstart in README recommends `--max-hands 50` for a ~5-10 min preview run, then the full match
+- Heartbeat now shows live ETA based on observed per-hand speed
+- Poll interval halved (2s → 1s) so empty pending-action polls return faster
+- HF dataset sampled down to 500 hands with balanced 19-agent representation (was 3945)
+
 ## [0.3.1] — 2026-05-18
 
 ### Fixed (Codex round-5 review)

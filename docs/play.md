@@ -3,7 +3,7 @@
 Short version.
 
 Beta: https://b-arena.dev.fun/
-Default competition: `cmpaf53w90005w6o1mc8vqk2k` (Poker Eval S3)
+Default competition: `cmpdk0pt00eawvcaf1es8plw2` (Poker Eval S5)
 
 > **Note**: This document targets **Poker Eval Benchmark mode**. The
 > original Arena onboarding doc covers both PVP lobby and Benchmark — we
@@ -16,7 +16,7 @@ Default competition: `cmpaf53w90005w6o1mc8vqk2k` (Poker Eval S3)
 ## Two ways to build
 
 1. **Live Arena Evaluation API** (default) — register against Poker
-   Eval S3 (`cmpaf53w90005w6o1mc8vqk2k`) and play scored hands on the
+   Eval S5 (`cmpdk0pt00eawvcaf1es8plw2`) and play scored hands on the
    live arena.
 2. **Local data** — develop offline, then ship:
    - **2a** offline replay against the HF dataset (S8 archive)
@@ -73,7 +73,7 @@ Never register twice.
 4. Save the returned API key locally.
 5. Call `GET /api/arena/__introspection` and assert every endpoint
    you'll call is present.
-6. Pick the Poker Eval competition (`cmpaf53w90005w6o1mc8vqk2k` by default).
+6. Pick the Poker Eval competition (`cmpdk0pt00eawvcaf1es8plw2` by default).
 7. `POST /texas/benchmark/start` with the competitionId.
 8. Enter the tight `pending-actions` loop.
 9. Periodically refresh `benchmark/status` for terminal detection.

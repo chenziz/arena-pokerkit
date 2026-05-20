@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-3776ab)](pyproject.toml)
-[![Version](https://img.shields.io/badge/version-0.3.0-success)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.2-success)](CHANGELOG.md)
 
 Build a poker agent for dev.fun Arena. Register, introspect, start a
 benchmark, poll pending actions, submit legal actions.
@@ -12,7 +12,7 @@ Beta arena: https://b-arena.dev.fun/
 ## Two ways to build
 
 1. **Live Arena Evaluation API** (default). Your agent registers, plays
-   the live Poker Eval S3 benchmark against the reference panel, and is
+   the live Poker Eval S5 benchmark against the reference panel, and is
    scored on-server.
 2. **Local data.** Develop offline against the Hugging Face dataset
    (`dannyobito/arena-pokerkit-hands`, S8 archive), then ship to the
@@ -24,10 +24,19 @@ Beta arena: https://b-arena.dev.fun/
     cd arena-pokerkit
     uv sync
     cp .env.example .env
+
+    # Preview run (~5-10 min, 50 hands)
+    uv run examples/agent.py --max-hands 50
+
+    # Full match (~70 min, all 500 hands)
     uv run examples/agent.py
 
-`.env.example` defaults to `ARENA_COMPETITION_ID=cmpaf53w90005w6o1mc8vqk2k`
-(Poker Eval S3). Override per run with `--competition-id <id>`.
+Full S5 matches take ~70 min on Arena (500 hands × ~6-10s/hand). Start
+with `--max-hands 50` to validate your `decide()` function in ~5 min,
+then run the full match for a real bb/100 + leaderboard rank.
+
+`.env.example` defaults to `ARENA_COMPETITION_ID=cmpdk0pt00eawvcaf1es8plw2`
+(Poker Eval S5). Override per run with `--competition-id <id>`.
 
 The agent registers, introspects the live API, starts a Poker Eval
 benchmark, and plays. Watch it live at https://b-arena.dev.fun.
@@ -69,7 +78,7 @@ Files your agent creates locally (do not commit — already gitignored):
         --dataset ./hands/data/hands.jsonl
 
 The HF dataset is an S8 settled-hand archive (May 2026). Live Poker
-Eval S3 scores you on its own on-server flow, not against this file.
+Eval S5 scores you on its own on-server flow, not against this file.
 
 ## Bring your own coding agent
 

@@ -22,7 +22,10 @@ CLI:
     uv run examples/agent.py --competition-id <id> # override env
     uv run examples/agent.py --dry-run             # mock loop, no network
     uv run examples/agent.py --dry-run-scenario queued|stale
-    uv run examples/agent.py --max-hands 10        # cap hands before exit
+    uv run examples/agent.py --max-hands 10        # cap hands (server-settled)
+    uv run examples/agent.py --agent path/to/decide.py  # plug-in decide()
+
+You can also use the branded CLI: `pokerkit run --max-hands 10`.
 """
 from __future__ import annotations
 
@@ -446,7 +449,9 @@ def _run_benchmark_loop(
     --max-hands, and deadline computation identical across paths."""
     state = load_state()
     rng = random.Random()
-    hands_acted = 0
+    hands_acted = 0           # actions submitted (kept for telemetry only)
+    last_completed_hands = 0  # server-side settled-hand counter; drives --max-hands (B1)
+    saw_status_refresh = False
     last_status_at = 0.0    # force one status check up front
     last_heartbeat_at = 0.0
     first_heartbeat_done = False
@@ -454,9 +459,10 @@ def _run_benchmark_loop(
     loop_start_monotonic = time.monotonic()
 
     # P2-4: emit a heartbeat BEFORE the first decide() call so live mode
-    # shows immediate signs of life. We don't know phase yet; print zeros.
+    # shows immediate signs of life. We don't know phase yet; print "?".
+    # B3: target shown as "?" until first status refresh fills in match.targetHands.
     _emit_heartbeat(phase="(starting)", completed=0,
-                    target=args.max_hands or "?", score=None,
+                    target="?", score=None,
                     pending_count=0, label=label, eta_str="")
     last_heartbeat_at = time.time()
     first_heartbeat_done = True
@@ -534,8 +540,13 @@ def _run_benchmark_loop(
                         pass
                     continue
                 raise
-            if args.max_hands and hands_acted >= args.max_hands:
-                print(f"[arena-pokerkit] hit --max-hands={args.max_hands}, stopping")
+            # B1: stop based on server-settled hands. Don't trigger before the
+            # first status refresh — completedHands may still be 0 from the
+            # very first poll.
+            if (args.max_hands and saw_status_refresh
+                    and last_completed_hands >= args.max_hands):
+                print(f"[arena-pokerkit] hit --max-hands={args.max_hands} "
+                      f"(completedHands={last_completed_hands}), stopping")
                 return 0
 
         # Periodic status refresh + terminal detection.
@@ -560,6 +571,19 @@ def _run_benchmark_loop(
             last_status_at = now
             if isinstance(status, dict):
                 match = status.get("match") or {}
+                saw_status_refresh = True
+                try:
+                    last_completed_hands = int(match.get("completedHands") or 0)
+                except (TypeError, ValueError):
+                    last_completed_hands = 0
+                # B1: also enforce --max-hands here so the loop can stop
+                # promptly between hands even if no fresh pending table comes.
+                if (args.max_hands
+                        and last_completed_hands >= args.max_hands):
+                    print(f"[arena-pokerkit{label}] hit --max-hands="
+                          f"{args.max_hands} "
+                          f"(completedHands={last_completed_hands}), stopping")
+                    return 0
                 if now - last_heartbeat_at >= 5.0:
                     eta_str = _compute_eta(
                         loop_start_monotonic,
@@ -668,6 +692,38 @@ def run_live_benchmark(args: argparse.Namespace,
         client.close()
 
 
+# ─── External decide() loader (--agent flag) ────────────────────────────────
+
+
+def load_external_decide(path: str) -> Any:
+    """Load a `decide` symbol from an external .py file. Used by the
+    `--agent <path>` CLI flag and by `pokerkit run --agent ...`.
+
+    The file must export a top-level `decide(table, deadline_s, ctx=None)
+    -> dict` function. Raises SystemExit with a clear message on failure
+    so users don't get a cryptic ImportError mid-loop."""
+    import importlib.util
+    from pathlib import Path as _Path
+
+    p = _Path(path)
+    if not p.exists():
+        raise SystemExit(f"[arena-pokerkit] --agent path not found: {path}")
+    spec = importlib.util.spec_from_file_location(
+        f"_external_agent_{p.stem}", str(p))
+    if spec is None or spec.loader is None:
+        raise SystemExit(f"[arena-pokerkit] could not import {path}")
+    mod = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(mod)  # type: ignore[attr-defined]
+    except Exception as e:
+        raise SystemExit(f"[arena-pokerkit] error loading {path}: {e}")
+    fn = getattr(mod, "decide", None)
+    if not callable(fn):
+        raise SystemExit(
+            f"[arena-pokerkit] {path} has no top-level `decide(...)` function")
+    return fn
+
+
 # ─── Main / CLI ─────────────────────────────────────────────────────────────
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -682,7 +738,13 @@ def main(argv: Optional[list[str]] = None) -> int:
                         help="Dry-run scenario: instant=table immediately, "
                              "queued=panel_acting warmup, stale=first action 409")
     parser.add_argument("--max-hands", type=int, default=0,
-                        help="Stop after N hands (0 = run until terminal)")
+                        help="Stop after N hands settled on server "
+                             "(uses match.completedHands; 0 = run until terminal)")
+    parser.add_argument("--agent", default=None,
+                        help="Path to a .py file exposing decide() — "
+                             "loads it and uses it instead of the built-in "
+                             "L1 heuristic. Use examples/skeletons/*.py to "
+                             "sanity-check your submission pipeline.")
     parser.add_argument("--handle", default="pokerkit-starter",
                         help="Agent handle for first registration")
     parser.add_argument("--name", default="PokerKit Starter",
@@ -691,12 +753,17 @@ def main(argv: Optional[list[str]] = None) -> int:
                         help="Agent quote shown on the leaderboard")
     args = parser.parse_args(argv)
 
+    decide_fn = decide
+    if args.agent:
+        decide_fn = load_external_decide(args.agent)
+        print(f"[arena-pokerkit] using external decide() from {args.agent}")
+
     if args.dry_run:
         # Late import: mock module is only loaded when --dry-run is set.
         from mock import run_mock_benchmark
-        return run_mock_benchmark(args, decide_fn=decide,
+        return run_mock_benchmark(args, decide_fn=decide_fn,
                                   retrieve_solver_context=retrieve_solver_context)
-    return run_live_benchmark(args)
+    return run_live_benchmark(args, decide_fn=decide_fn)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,9 @@
 .arena-poker-state
 .arena-poker-state.tmp
 
+# Replay viewer output (regenerate with `pokerkit replay`)
+replay.html
+
 # Python
 __pycache__/
 *.py[cod]

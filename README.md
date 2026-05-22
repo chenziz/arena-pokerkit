@@ -2,10 +2,13 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-3776ab)](pyproject.toml)
-[![Version](https://img.shields.io/badge/version-0.3.2-success)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.0-success)](CHANGELOG.md)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/chenziz/arena-pokerkit/blob/main/examples/colab/quickstart.ipynb)
 
 Build a poker agent for dev.fun Arena. Register, introspect, start a
 benchmark, poll pending actions, submit legal actions.
+
+![demo](docs/demo.gif)
 
 Beta arena: https://b-arena.dev.fun/
 
@@ -25,25 +28,38 @@ Beta arena: https://b-arena.dev.fun/
     uv sync
     cp .env.example .env
 
-    # Preview run (~5-10 min, 50 hands)
-    uv run examples/agent.py --max-hands 50
+    # Preview run (~3-5 min, 50 settled hands)
+    ./pokerkit run --max-hands 50
 
-    # Full match (~70 min, all 500 hands)
-    uv run examples/agent.py
+    # Full match (~30-40 min, all 500 hands)
+    ./pokerkit run
 
-Full S5 matches take ~70 min on Arena (500 hands × ~6-10s/hand). Start
-with `--max-hands 50` to validate your `decide()` function in ~5 min,
-then run the full match for a real bb/100 + leaderboard rank.
+Full S5 matches take ~30-40 min on Arena (500 hands × ~4-5s/settled
+hand). Start with `--max-hands 50` to validate your `decide()` function
+in ~3-5 min, then run the full match for a real bb/100 + leaderboard
+rank.
+
+Prefer not to use the wrapper? `uv run examples/agent.py --max-hands 50`
+does the same thing.
 
 `.env.example` defaults to `ARENA_COMPETITION_ID=cmpdk0pt00eawvcaf1es8plw2`
 (Poker Eval S5). Override per run with `--competition-id <id>`.
+
+After the match, render a self-contained HTML replay:
+
+    ./pokerkit replay --latest    # writes replay.html — open or email it
+
+Sanity-check the submission pipeline with a skeleton agent before plugging
+in your model:
+
+    ./pokerkit run --agent examples/skeletons/random_action.py --max-hands 5
 
 The agent registers, introspects the live API, starts a Poker Eval
 benchmark, and plays. Watch it live at https://b-arena.dev.fun.
 
 Smoke-test the loop without network access:
 
-    uv run examples/agent.py --dry-run --max-hands 1
+    ./pokerkit run --dry-run --max-hands 1
 
 Expected output (success looks like this):
 
@@ -88,15 +104,23 @@ Codex, Hermes, OpenClaw, or any agent that reads markdown and calls HTTP.
 ## File map
 
 ```
-examples/agent.py                ← edit decide() here (L1 heuristic)
+pokerkit                         ← branded CLI wrapper (run | replay | test | version)
+examples/cli.py                  ← CLI dispatcher (pokerkit verbs)
+examples/agent.py                ← edit decide() here (L1 heuristic) + --agent loader
+examples/replay.py               ← writes a self-contained replay.html
+examples/testing.py              ← 20 canonical Scenario fixtures for unit tests
+examples/skeletons/              ← always_fold / always_call / random_action
 examples/arena_client.py         ← HTTP client + introspection + creds (rarely touch)
 examples/mock.py                 ← --dry-run scaffolding (rarely touch)
 examples/llm_agent.py            ← L2 LLM-driven agent (Claude SDK)
 examples/research_static_chart.py ← runnable Auto Research example (preflop chart)
+examples/colab/quickstart.ipynb  ← Colab badge target
 examples/prompt.md               ← paste into any coding agent
 docs/strategy.md                 ← L1/L2/L3 + Auto Research
 docs/play.md                     ← Arena game flow + credentials
+docs/demo.gif                    ← README terminal demo
 tests/test_smoke.py              ← uv run pytest tests/
+tests/test_user_decide_example.py ← copy this and unit-test YOUR decide()
 ```
 
 ## How it works

@@ -2,6 +2,22 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] — 2026-05-22 — "Replay Release"
+
+### Added
+- `pokerkit replay <match-id>` — self-contained HTML viewer for past matches (single file, no server). Backed by live `/agent/{agentId}/replays` + `/agent/submissions`. Graceful fallback when the replays endpoint is absent.
+- `pytest-pokerkit` scenario fixtures (`examples/testing.py`) — 20 canonical hands (preflop premium / preflop trash / cbet / draws / value bets / bluff catchers / multi-way / shoves) plus `tests/test_user_decide_example.py` showing how to unit-test your `decide()` in 50ms.
+- `examples/skeletons/{always_fold,always_call,random_action}.py` — drop-in `decide()` agents to sanity-check your submission pipeline before plugging in your model.
+- `pokerkit` branded CLI (`pokerkit run | replay | test | version`) via repo-root shell wrapper + `[project.scripts]` entry-point. `pokerkit run --agent path/to/decide.py` loads any external `decide()` symbol via `importlib.util`.
+- `examples/colab/quickstart.ipynb` + Colab badge — browser-only onboarding (install / register / dry-run / 20-hand live preview).
+- README terminal demo (`docs/demo.gif`).
+
+### Changed
+- `--max-hands N` now counts settled hands (server-side `match.completedHands`), not action submissions. The previous behavior stopped after ~N/3.5 hands because each hand averages ~3-4 action submissions; users setting `--max-hands 30` saw the run end after ~8 hands. We keep `hands_acted` for telemetry only and require at least one `/texas/benchmark/status` refresh before honoring the cap.
+- README + docs time estimates corrected: full S5 match ~30-40 min (was misstated as ~70 min based on the S3 rate; verified at ~4-5 s/settled hand on S5), preview ~3-5 min (was 5-10 min).
+- Starting heartbeat shows `0/?` for unknown target until first status refresh (was misleading `0/N` based on `--max-hands`).
+- Version bumped to 0.4.0.
+
 ## [0.3.2] — 2026-05-18
 
 ### Changed

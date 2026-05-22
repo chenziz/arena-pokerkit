@@ -492,6 +492,99 @@ def test_malformed_pending_actions_response():
 
 
 @respx.mock
+def test_max_hands_stops_on_server_completed_hands(monkeypatch):
+    """v0.4 B1: --max-hands now counts server-settled hands
+    (match.completedHands), not actions submitted. Simulate: agent
+    submits N actions, /status reports completedHands=2, --max-hands 2
+    must trigger stop AFTER status reports >=2."""
+    import time as _time
+    # Force faster status refresh so the test doesn't sleep 8s per iter.
+    monkeypatch.setattr(agent_mod, "STATUS_REFRESH_S", 0.0)
+    monkeypatch.setattr(agent_mod, "POLL_INTERVAL", 0.01)
+    monkeypatch.setattr(agent_mod, "POLL_JITTER", 0.0)
+
+    respx.post(f"{MOCK_BASE}/auth/register").mock(
+        return_value=httpx.Response(200, json={
+            "agentId": "agent_mh", "apiKey": "k",
+            "handle": "h", "name": "n",
+        })
+    )
+    respx.get(f"{MOCK_BASE}/agent/me").mock(
+        return_value=httpx.Response(200, json={"id": "agent_mh"})
+    )
+    respx.get(f"{MOCK_BASE}/__introspection").mock(
+        return_value=httpx.Response(200, json=_introspection_payload())
+    )
+    respx.post(f"{MOCK_BASE}/texas/benchmark/start").mock(
+        return_value=httpx.Response(200, json=_start_payload("queued"))
+    )
+
+    table = _table_state(_time.time() + 10.0)
+    # Endless supply of tables — only the status counter stops us.
+    respx.get(re.compile(
+        re.escape(f"{MOCK_BASE}/texas/pending-actions") + r"\?.*"
+    )).mock(return_value=httpx.Response(200, json={"tables": [table]}))
+
+    # status: 0 → 1 → 2 (terminal once it hits the cap)
+    status_responses = [
+        httpx.Response(200, json={"match": {
+            "id": "m_mh", "competitionId": "c", "agentId": "agent_mh",
+            "status": "Running", "phase": "queued",
+            "targetHands": 500, "completedHands": 0,
+            "rawChipDelta": 0, "rawBbPer100": 0.0,
+            "adjustedChipDelta": None, "adjustedBbPer100": None,
+            "currentTableId": None, "startedAt": 1, "endedAt": None,
+            "error": None,
+        }, "table": None, "participant": None}),
+        httpx.Response(200, json={"match": {
+            "id": "m_mh", "competitionId": "c", "agentId": "agent_mh",
+            "status": "Running", "phase": "queued",
+            "targetHands": 500, "completedHands": 1,
+            "rawChipDelta": 0, "rawBbPer100": 0.0,
+            "adjustedChipDelta": None, "adjustedBbPer100": None,
+            "currentTableId": None, "startedAt": 1, "endedAt": None,
+            "error": None,
+        }, "table": None, "participant": None}),
+        # 3rd call: completedHands=2 — triggers --max-hands=2 stop
+        httpx.Response(200, json={"match": {
+            "id": "m_mh", "competitionId": "c", "agentId": "agent_mh",
+            "status": "Running", "phase": "queued",
+            "targetHands": 500, "completedHands": 2,
+            "rawChipDelta": 0, "rawBbPer100": 0.0,
+            "adjustedChipDelta": None, "adjustedBbPer100": None,
+            "currentTableId": None, "startedAt": 1, "endedAt": None,
+            "error": None,
+        }, "table": None, "participant": None}),
+        # safety: any additional polls return terminal phase
+        httpx.Response(200, json={"match": {
+            "id": "m_mh", "competitionId": "c", "agentId": "agent_mh",
+            "status": "Completed", "phase": "completed",
+            "targetHands": 500, "completedHands": 2,
+            "rawChipDelta": 0, "rawBbPer100": 0.0,
+            "adjustedChipDelta": 0.0, "adjustedBbPer100": 0.0,
+            "currentTableId": None, "startedAt": 1, "endedAt": 2,
+            "error": None,
+        }, "table": None, "participant": None}),
+    ]
+    respx.get(re.compile(
+        re.escape(f"{MOCK_BASE}/texas/benchmark/status") + r"\?.*"
+    )).mock(side_effect=status_responses)
+
+    action_route = respx.post(f"{MOCK_BASE}/texas/action").mock(
+        return_value=httpx.Response(200, json={"table": table, "participant": None})
+    )
+
+    rc = agent_mod.main(["--dry-run", "--competition-id", "c", "--max-hands", "2"])
+    assert rc == 0
+    # B1: under the OLD semantic, --max-hands=2 would stop after 2 action POSTs.
+    # Under the new semantic we keep submitting until completedHands reaches 2.
+    # So we expect MORE than 2 actions submitted (typically 3+).
+    assert action_route.call_count >= 2, (
+        f"expected at least 2 action POSTs before completedHands=2, "
+        f"got {action_route.call_count}")
+
+
+@respx.mock
 def test_terminal_cancelled_phase():
     """If benchmark/status reports phase='cancelled', the loop must stop
     cleanly with exit 0 (terminal phase recognized from introspection enum)."""

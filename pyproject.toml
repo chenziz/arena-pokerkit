@@ -1,6 +1,6 @@
 [project]
 name = "arena-pokerkit"
-version = "0.3.2"
+version = "0.4.0"
 description = "Build a poker agent for dev.fun Arena"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -15,6 +15,14 @@ dependencies = [
 [project.optional-dependencies]
 llm = ["anthropic>=0.40"]
 dev = ["pytest>=8", "respx>=0.21"]
+
+# `pokerkit` branded CLI verb. Once you `uv pip install -e .` (or
+# `pip install arena-pokerkit`), the entry-point dispatches to
+# examples/cli.py. For pure-uv-run-without-install workflows the
+# repo also ships a `pokerkit` shell wrapper at the repo root that
+# does the same thing via `python -m examples.cli`.
+[project.scripts]
+pokerkit = "examples.cli:main"
 
 [tool.uv]
 package = false

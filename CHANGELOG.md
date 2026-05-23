@@ -2,6 +2,23 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] — 2026-05-23 — "Heuristic Learning Release"
+
+### Added
+- `pokerkit analyze` — failure analysis report for the Heuristic Learning
+  loop; fetches `/agent/submissions`, ranks positions and hands by chip
+  delta, outputs a paste-ready report for Claude Code / Codex
+- `examples/analyze.py` — implementation of the `analyze` verb
+- `examples/STRATEGY.md.template` — fillable poker strategy template;
+  read by the coding agent alongside `failure_report.txt` to guide
+  `decide()` improvements (zero LLM calls at runtime)
+- Heuristic Learning loop section in `docs/strategy.md` — explains the
+  paradigm (LLM writes code, not plays hands), 6-step loop diagram,
+  and what research data to bake into `decide()`
+- "Heuristic Learning mode" prompt in `examples/prompt.md` — copy-paste
+  prompt for coding agents improving `decide()` offline
+- "Improve your agent" section in README with HL loop quick-start
+
 ## [0.4.0] — 2026-05-22 — "Replay Release"
 
 ### Added

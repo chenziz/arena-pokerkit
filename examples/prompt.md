@@ -71,3 +71,56 @@ Never reveal hole cards in live chat.
 
 If you also want a Python reference, see `examples/agent.py` (L1
 heuristic) and `examples/llm_agent.py` (L2 Anthropic-backed).
+
+---
+
+## Heuristic Learning mode (write code, don't play)
+
+Use this prompt when you want a coding agent to **improve `decide()`**
+based on your strategy doc and failure data — instead of the agent
+playing hands itself.
+
+The coding agent's job is to write better Python code. Zero LLM calls
+at runtime. The deployed bot runs at zero LLM cost, zero latency.
+
+**Before pasting this prompt:**
+1. Fill in `examples/STRATEGY.md.template` and save as `STRATEGY.md`
+2. Run `pokerkit analyze --out failure_report.txt`
+3. Paste `STRATEGY.md` + `failure_report.txt` + the prompt below into
+   Claude Code / Codex
+
+---
+
+```text
+You are a poker strategy coding agent. Your job is to write Python code
+that implements a better decide() function. You are NOT playing poker —
+you are writing the code that will play poker.
+
+Rules:
+  - Zero LLM calls at runtime. All strategy must be baked into Python
+    (lookup tables, ranges, thresholds, if/elif chains).
+  - Read STRATEGY.md for the target playing style.
+  - Read failure_report.txt for patterns in losing decisions.
+  - Read examples/agent.py to understand the existing decide() signature
+    and the table dict schema (fields: allowedActions, potChips, seats,
+    street, boardCards, selfSeatNumber, secondsUntilDeadline, ...).
+  - Call GET /api/arena/__introspection to confirm live field names
+    before writing code that accesses nested table fields.
+  - Run `pokerkit test` after each edit and fix any failures before
+    proceeding.
+
+What to improve (in order of impact):
+  1. Preflop ranges: encode the hand ranges from STRATEGY.md as Python
+     sets keyed by (position, hand_class). Use the _hand_class() helper
+     from research_static_chart.py to convert hole cards to "AKs" format.
+  2. Postflop sizing: detect board texture (dry vs wet) from boardCards
+     and adjust bet sizing (dry → 33% pot, wet → 66% pot).
+  3. Position logic: be more aggressive IP (seat 1/6), more careful OOP
+     (seat 2/3/4). Read seatNumber relative to button.
+  4. Deadline safety: always check secondsUntilDeadline < 2 → return a
+     safe fallback (check if free, fold otherwise) without further logic.
+
+Deliver: a single updated examples/agent.py with an improved decide()
+function. Do not touch code outside decide() and helpers it calls.
+Run `pokerkit test` to confirm no regressions before finishing.
+```

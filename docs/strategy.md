@@ -257,6 +257,73 @@ table state, retrieve top-5 nearest spots, hand the frequencies to
 
 ---
 
+## Heuristic Learning loop
+
+**What it is.** A paradigm from Jiayi Weng (MTS, OpenAI): use an LLM as a
+*coding agent* to write and refine Python policy code. No gradient descent.
+No neural net at inference time. The LLM is called during development; the
+deployed bot is pure Python.
+
+> "Maybe heuristics were not too weak. Maybe they were just too expensive
+> to maintain. Maybe it's the next paradigm." — Jiayi Weng
+
+In practice: Codex grew programmatic policies (no neural nets) that hit max
+score on Breakout and SOTA on MuJoCo. The same loop works for poker — let
+the LLM write a better `decide()` once, then run it at zero cost forever.
+
+This is sharply different from L2 (LLM called *per hand at runtime*):
+
+| | L2 — LLM plays | Heuristic Learning |
+|---|---|---|
+| LLM called | every hand (~$0.02/hand) | once per iteration, offline |
+| Runtime cost | ~$300/benchmark | $0 |
+| Interpretable | no | yes (pure Python) |
+| Speed | slow (API latency) | instant |
+| Ceiling | high if prompted well | as high as you program |
+
+### The 6-step loop (repeat until bb/100 plateaus)
+
+```
+1. STRATEGY    cp examples/STRATEGY.md.template STRATEGY.md
+               Fill in: ranges, sizing, aggression, adaptation rules.
+               This is your "spec" for the coding agent.
+
+2. ANALYZE     pokerkit analyze --out failure_report.txt
+               → which positions/hands are losing the most chips?
+               → paste-ready report for Claude Code
+
+3. CODE        Paste STRATEGY.md + failure_report.txt + HL prompt
+               (from examples/prompt.md) into Claude Code / Codex.
+               The LLM rewrites decide() in examples/agent.py,
+               baking ranges and rules into Python — zero runtime LLM.
+
+4. TEST        pokerkit test
+               → 20 canonical scenarios, all must pass.
+
+5. EVALUATE    pokerkit run --max-hands 50   (~3-5 min on Arena)
+               → bb/100 delta vs previous run.
+               → If worse: revert, adjust prompt, go to 3.
+               → If better: commit, continue.
+
+6. FULL RUN    pokerkit run   (when satisfied — 500 hands, leaderboard)
+```
+
+### What the coding agent bakes into decide()
+
+| Research source | What to encode in code |
+|---|---|
+| STRATEGY.md ranges | Opening/defending sets per position: `UTG_OPEN = {"AA","KK",...}` |
+| `research_static_chart.py` | Full preflop chart already implemented — import and wire in |
+| Postflop solver output | Board-texture buckets → bet sizing: `dry → 0.33 * pot` |
+| `pokerkit analyze` report | Specific position/hand fixes: "UTG losing 42 chips avg → tighten range" |
+| `/texas/agent-stats` API | Opponent HUD: VPIP > 40% → thin value; < 20% → bluff less |
+
+The failure report shows which seats (positions) and hole-card combinations
+are losing the most chips. Give it to Claude Code alongside `STRATEGY.md`
+and it will patch the exact weaknesses each iteration.
+
+---
+
 ## Solver / GTO / CFR primer
 
 | Term | One-line meaning |

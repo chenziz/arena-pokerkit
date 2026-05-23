@@ -114,6 +114,8 @@ examples/arena_client.py         ← HTTP client + introspection + creds (rarely
 examples/mock.py                 ← --dry-run scaffolding (rarely touch)
 examples/llm_agent.py            ← L2 LLM-driven agent (Claude SDK)
 examples/research_static_chart.py ← runnable Auto Research example (preflop chart)
+examples/STRATEGY.md.template    ← fill this in → feed to Claude Code for HL loop
+examples/analyze.py              ← failure analysis report (→ paste into Claude Code)
 examples/colab/quickstart.ipynb  ← Colab badge target
 examples/prompt.md               ← paste into any coding agent
 docs/strategy.md                 ← L1/L2/L3 + Auto Research
@@ -164,6 +166,24 @@ approaches: heuristic, LLM-in-the-loop, and trained weights.
 Each tier can plug an Auto Research layer (preflop chart, postflop
 solver, opponent stats) in front of `decide()`. A runnable example
 ships at `examples/research_static_chart.py`. See `docs/strategy.md`.
+
+## Improve your agent (Heuristic Learning loop)
+
+The fastest path from baseline to leaderboard: let a coding agent write
+better `decide()` code for you. No LLM calls at runtime — pure Python,
+zero cost, fully inspectable.
+
+    cp examples/STRATEGY.md.template STRATEGY.md   # 1. describe your strategy
+    pokerkit run --max-hands 50                     # 2. get a baseline bb/100
+    pokerkit analyze --out failure_report.txt       # 3. find losing patterns
+    # 4. paste STRATEGY.md + failure_report.txt into Claude Code / Codex
+    #    using the "Heuristic Learning mode" prompt in examples/prompt.md
+    pokerkit test                                   # 5. verify no regressions
+    pokerkit run --max-hands 50                     # 6. compare bb/100 delta
+    # repeat from step 3 until bb/100 stops improving
+
+See `docs/strategy.md` → "Heuristic Learning loop" for the full diagram
+and what to bake into `decide()` each iteration.
 
 ## What's next
 

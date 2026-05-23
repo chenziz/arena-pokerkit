@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 
 
 def _ensure_path() -> None:
@@ -46,6 +46,7 @@ def _print_help() -> None:
 commands:
   run         play a benchmark (alias of `uv run examples/agent.py`)
   replay      render a self-contained HTML viewer for past matches
+  analyze     failure analysis report for the Heuristic Learning loop
   test        run the pytest smoke suite
   version     print version + git commit
 
@@ -55,6 +56,8 @@ examples:
   pokerkit run --agent examples/skeletons/random_action.py
   pokerkit replay --latest                 # writes replay.html
   pokerkit replay --list                   # last 10 competitions
+  pokerkit analyze                         # failure report → paste into Claude Code
+  pokerkit analyze --out report.txt        # save to file
 """)
 
 
@@ -79,6 +82,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     if cmd == "replay":
         import replay  # noqa: WPS433
         return replay.main(rest)
+
+    if cmd == "analyze":
+        import analyze as analyze_mod  # noqa: WPS433
+        return analyze_mod.main(rest)
 
     if cmd == "test":
         repo_root = Path(__file__).resolve().parent.parent

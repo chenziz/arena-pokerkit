@@ -48,7 +48,8 @@ cost varies by model + harness + token volume.
 ## Why baked-in code beats runtime LLM
 
 - **Speed.** Pure Python: microseconds per decision. LLM: 2-10 seconds.
-  Poker Eval has a 20-second deadline; LLM can run out.
+  Poker Eval has a 60-second per-decision deadline; LLM can still run
+  out under retry / long-chain reasoning.
 - **Cost.** HL is free at runtime. Level 5 runtime-LLM is paid per
   decision; the per-match total varies by model + harness + token
   volume, so we don't quote a fixed figure.

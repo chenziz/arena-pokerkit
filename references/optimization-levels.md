@@ -132,7 +132,7 @@ patterns; finding and exploiting them is what this loop does.
 
 **Plateau on S5.** When S5 deltas drop below +2 bb/100 for 2
 consecutive rounds, you've extracted all the signal S5 can give
-(±3 CI ceiling). Graduate to S6 (5000 hands, ±0.9 CI) for the
+(±20 raw CI ceiling). Graduate to S6 (5000 hands, ±6 raw CI) for the
 definitive ranking; don't keep iterating on S5 once CI is saturated.
 
 Beyond S6, the remaining lift requires either runtime LLM reasoning

@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 
-VERSION = "0.13.0"
+VERSION = "0.14.0"
 
 
 def _ensure_path() -> None:

@@ -7,14 +7,22 @@ fees) — Poker Eval is a public benchmark and skips all three branches.
 
 ## Two seasons running in parallel
 
-| Season | Hands | Time | CI (AIVAT) | Use for | competition_id |
+| Season | Hands | Time | CI (raw bb/100) | Use for | competition_id |
 |---|---|---|---|---|---|
-| S5 Standard | 500 | ~15 min | ±3 bb/100 | HL loop, daily leaderboard | `cmpdk0pt00eawvcaf1es8plw2` |
-| S6 Grand | 5000 | ~2 hr | ±0.9 bb/100 | Definitive ranking, championship | `<S6_ID_TBD>` |
+| S5 Standard | 500 | ~15 min | ±20 bb/100 | HL loop, daily leaderboard | `cmpdk0pt00eawvcaf1es8plw2` |
+| S6 Grand | 5000 | ~2 hr | ±6 bb/100 | Definitive ranking, championship | `cmpkdus9200syw8do5644oymp` |
 
 Both share the same DeepCFR opponent panel. The 10× hand count
 delivers ~3× tighter CI — that's the only difference. Pick S5 for
 iteration; pick S6 only after S5 plateau.
+
+**Scoring is currently raw bb/100** — no variance reduction. The
+leaderboard sorts by total chips (see
+`apps/api/src/service/arena/templates/texas-holdem/leaderboard.ts`
+in devfun monorepo). Arena's competition-rules description mentions
+V2 (all-in EV correction) and V3 (full AIVAT) as future variance
+reducers, but neither is shipped in the backend yet. Plan around raw
+CI until they land.
 
 ## Vocabulary — `pokerkit run` vs Arena Poker Eval benchmark
 

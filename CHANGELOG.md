@@ -2,6 +2,86 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.0] — 2026-05-25 — "Backend Truth + Greeting V2 — DeepCFR confirmed, AIVAT removed, real S6 ID"
+
+Fact-checked the skill against the devfun backend (`~/devfun`) and
+corrected every claim that didn't match shipped code. Also rebuilt the
+First Contact greeting from v0.8.1's strengths after v0.13's version
+lost the time + who-does-what annotations.
+
+### Changed — backend truth pass
+
+- **AIVAT / "adjusted CI" claims removed.** The Arena leaderboard
+  sorts by total chips today
+  (`apps/api/src/service/arena/templates/texas-holdem/leaderboard.ts:128-147`).
+  The `adjustedBbPer100` field exposed by the API is UI-layer math
+  from chip deltas, not a variance-reduced statistic. AIVAT and the
+  all-in EV correction are documented as **planned (V2/V3)** in the
+  competition rules but neither has shipped. Skill no longer claims
+  AIVAT — only references it as future work.
+- **CI numbers replaced with raw bb/100.** Old skill said S5 ±3 and
+  S6 ±0.9 (those would require AIVAT or similar variance reduction).
+  Real raw CI: **S5 (500 hands) ≈ ±20 bb/100**, **S6 (5000 hands) ≈
+  ±6 bb/100**. Wider than before but truthful. Updated everywhere CI
+  appears: `SKILL.md` Vocabulary + Step 5 + Step 6 plateau message,
+  `references/poker-eval-arena.md` two-season table, `.env.example`
+  S5/S6 comments, `references/optimization-levels.md` Level 4 plateau
+  callout.
+- **Score interpretation template (Step 6)** rewritten: line 1 now
+  reads `{bb/100} ± {CI_for_season}` with explicit S5 ≈ ±20 / S6 ≈
+  ±6 anchors and a note that CI is wide because scoring is raw bb/100
+  with no variance adjustment yet. Line 4 notes V2/V3 will tighten
+  CI 3-10× when shipped.
+- **`<S6_ID_TBD>` placeholder swapped for the real S6 competition_id**:
+  `cmpkdus9200syw8do5644oymp` (confirmed live in production). Fixed
+  in `SKILL.md`, `references/poker-eval-arena.md`, `.env.example`.
+- **Per-decision timeout corrected to 60s** (was 20s in
+  `references/heuristic-learning.md`) — verified against the Arena
+  competition rules.
+- **DeepCFR claims kept** — verified against
+  `apps/poker-sidecar/app.py:30,52-92` and
+  `apps/poker-sidecar/README.md`. PyTorch checkpoint, 6-layer
+  256-hidden LegacyPokerNetwork, 4 actions, 6-max NLHE, deterministic
+  argmax, loaded from
+  `github.com/dberweger2017/deepcfr-texas-no-limit-holdem-6-players`.
+  Reference panel is real — only the variance-adjusted scoring claims
+  were wrong.
+
+### Changed — First Contact greeting V2 (pull back v0.8.1 strengths)
+
+- Rewrote the default greeting in `SKILL.md` First Contact protocol.
+  v0.13's version dropped the time + who-does-what annotations that
+  made v0.8.1 land cleanly. New greeting:
+  - 6 numbered steps (Setup / Strategy / Code / Arena S5 / Iterate /
+    Grad to S6) with per-step time estimate AND ownership marker
+    (`I do this` / `you answer` / `you approve`).
+  - Opens with "Looks like you shared **Arena PokerKit**" (recognizes
+    the share signal, mirrors v0.8.1 phrasing).
+  - Drops the "show levels / advanced options" parenthetical — the
+    6-level menu lives in `references/optimization-levels.md`, not
+    in the greeting.
+
+### Added — greeting triggers from ANY arena-pokerkit signal
+
+- New paragraph in First Contact protocol clarifies the trigger surface:
+  pasting the repo URL, the README URL, the raw SKILL.md URL, running
+  `npx skills add chenziz/arena-pokerkit`, or just mentioning the
+  project by name — all route into this protocol. Don't make the user
+  paste a specific URL form.
+
+### Verified
+
+- `./pokerkit test` → 21/21 still pass.
+- `./pokerkit version` → `0.14.0`.
+- `grep -r "S6_ID_TBD" SKILL.md references/ .env.example` → 0 hits
+  (only historical mentions remain in CHANGELOG v0.13 / v0.14 entries).
+- `grep "AIVAT" SKILL.md references/ docs/` → only as future/planned,
+  never as a current capability.
+- `grep "±0.9\|±2.0\|±3 bb\|±3 CI" SKILL.md references/` → 0 hits
+  (replaced by ±20 S5 / ±6 S6).
+- `grep "show levels" SKILL.md` → no hits in greeting block (still
+  referenced elsewhere as an opt-in command).
+
 ## [0.13.0] — 2026-05-25 — "Two Seasons + Graduation — S5 daily, S6 definitive"
 
 Arena now runs **two Poker Eval seasons in parallel** against the same

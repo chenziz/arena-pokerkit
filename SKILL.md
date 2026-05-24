@@ -59,15 +59,17 @@ license: MIT
 
 ### Arena seasons
 
-- **S5 (Standard)** — 500 hands, ~10-15 min, ±3 bb/100 CI. Default
-  season. Use this for the HL loop. Daily leaderboard.
-- **S6 (Grand Championship)** — 5000 hands, ~80-150 min, ±0.9 bb/100 CI.
-  Definitive ranking. Use ONLY after S5 plateau, when the user has
-  tuned their bot as far as ±3 CI can measure.
-- Both seasons share the same DeepCFR panel. The 10× hand count buys
-  3× tighter confidence interval — that's the only difference.
-- When surfacing scores, ALWAYS include CI: `+5.2 ± 3.0 bb/100` on
-  S5; `+5.2 ± 0.9 bb/100` on S6. Users need to see CI to know if their
+- **S5 (Standard)** — 500 hands, ~15 min, ±20 bb/100 CI (raw). Default
+  season. Use for the HL loop. Daily leaderboard. The CI is wide
+  because Arena scoring is currently raw bb/100 with no variance
+  adjustment — close bots can't be reliably ranked apart at S5.
+- **S6 (Grand Championship)** — 5000 hands, ~2 hr, ±6 bb/100 CI (raw).
+  Definitive ranking. Use after you've tuned on S5. Same DeepCFR panel.
+- Future: Arena plans V2 all-in EV correction + V3 AIVAT, which will
+  tighten CI ~3-10× at the same hand count. Until shipped, raw is what
+  you get.
+- When surfacing scores, ALWAYS include CI: `+5.2 ± 20 bb/100` on
+  S5; `+5.2 ± 6 bb/100` on S6. Users need to see CI to know if their
   rank vs neighbors is statistically meaningful.
 
 ### Locality rule — quick iteration is LOCAL, Arena is for real eval
@@ -92,27 +94,33 @@ not know yet what this skill does. Open with a brief greeting that
 explains the flow and asks for the go-ahead. Match the user's language
 (English / Chinese / etc.).
 
-**Keep the default greeting simple. Do NOT show the 6-level table up
-front — that's decision paralysis.** Show one paced narrative and let
-the user say "go". Only show the full level menu if they ask for it
-("show levels" / "详细" / "advanced options"):
+**This protocol triggers from ANY arena-pokerkit signal:** the user
+pasted the repo URL (`github.com/chenziz/arena-pokerkit`), the README
+URL, the raw SKILL.md URL, ran `npx skills add chenziz/arena-pokerkit`,
+or just mentioned the project by name. In all cases the user is asking
+for this skill — fetch SKILL.md (or assume you have it loaded) and
+follow this protocol. Don't make the user paste a specific URL form.
 
-> 👋 Arena PokerKit skill loaded. This walks you through building a
-> poker bot for **dev.fun Arena's Poker Eval benchmark** end-to-end
-> (~30-60 min, mostly autonomous).
+**Keep the default greeting simple. Do NOT show the 6-level table up
+front — that's decision paralysis.** Show one paced narrative with
+time + who-does-what annotations, and let the user say "go". Only
+show the full level menu if they ask for it ("show levels" / "详细" /
+"advanced options"):
+
+> 👋 Looks like you shared **Arena PokerKit**. Let's build a poker bot
+> for **dev.fun Arena's Poker Eval benchmark** — ~30-60 min for your
+> first submission, mostly autonomous.
 >
 > The flow:
 >
->   1. I clone the repo + run a baseline locally (~1 min)
->   2. I'll ask your playing style (one question, ~30 sec)
->   3. I code your `decide()` function and validate locally (~5 min)
->   4. We run the full Arena benchmark (~10 min, real DeepCFR opponents)
->   5. I analyze the result, propose patches, and we iterate until your
->      score plateaus
+>   1. **Setup** — clone + install + local baseline (~1 min, I do this)
+>   2. **Strategy** — pick a playing style (~30 sec, you answer)
+>   3. **Code** — bake your strategy into `decide()` + local tests (~5 min, I do this)
+>   4. **Arena S5** — 500 hands vs the DeepCFR panel (~15 min, you approve)
+>   5. **Iterate** — failure analysis → patch → re-run, until plateau (you approve each round)
+>   6. **Grad to S6** — 5000-hand definitive run, after S5 plateau (~2 hr, you approve)
 >
-> Want to see advanced options first (cost/time tradeoffs, paid
-> LLM-driven bots, trained-weights path)? Say **"show levels"**.
-> Otherwise say **"go"** and I'll drive.
+> Ready? Say **"go"** to start, or ask questions first.
 
 Wait for any affirmative ("yes" / "ok" / "go" / "start" / "走" / "继续"
 / a thumbs-up / etc.) before proceeding. If the user asks clarifying
@@ -241,7 +249,7 @@ the user can opt into S6 (5000 hands, ~2 hr) once they plateau.
 
 When it completes, **always** report the score using the 4-line
 "Score interpretation" template — and ALWAYS include the CI value
-(`±3 bb/100` for S5, `±0.9 bb/100` for S6).
+(`±20 bb/100` for S5, `±6 bb/100` for S6, raw — no variance adjustment).
 
 ## Step 6: Iterate or climb (ASK — one recommendation, not a menu)
 
@@ -288,7 +296,7 @@ Iteration tracking → recommendation:
   Score < -20:                      "Pull failure report → patch → re-run S5."
   Still climbing (delta >= +2):     "One more S5 round."
   Plateaued on S5 (delta < +2 last 2 iters):
-                                    "You've tuned as far as S5 (±3 CI) can measure.
+                                    "You've tuned as far as S5 (±20 raw CI) can measure.
                                      Graduate to S6 (5000 hands, ~2 hr) to lock in
                                      your definitive ranking on the championship
                                      leaderboard."
@@ -296,7 +304,7 @@ Iteration tracking → recommendation:
 ```
 
 When the user says "go" after plateau, run S6 by setting
-`ARENA_COMPETITION_ID=<S6_ID_TBD>` (or `--competition-id <S6_ID_TBD>`).
+`ARENA_COMPETITION_ID=cmpkdus9200syw8do5644oymp` (or `--competition-id cmpkdus9200syw8do5644oymp`).
 
 The agent says explicitly:
 
@@ -348,7 +356,9 @@ if not done, then L5/L6) — never just "iterate again forever".
 
 When reporting an Arena score, **always include these 4 lines**:
 
-1. **Raw score**: `{bb/100} ± {CI} bb/100` over `{N}` hands ({season name})
+1. **Raw score**: `{bb/100} ± {CI_for_season} bb/100` over `{N}` hands ({season name}).
+   For S5 (500h): CI ≈ ±20. For S6 (5000h): CI ≈ ±6. Wide because
+   scoring is raw bb/100 with no variance adjustment (yet).
 2. **What it means**: bb/100 = big blinds win/lose per 100 hands.
    Negative = losing money. Anchor: random-bot ≈ -200, solver-bot ≈ +5 to +15.
 3. **Why local ≠ Arena**: Local selfplay uses simple bots. Arena uses
@@ -357,7 +367,9 @@ When reporting an Arena score, **always include these 4 lines**:
 4. **What ± {CI} means**: your true skill is within {CI} bb/100 of
    this number, 95% confidence. If your rank-neighbors' CIs overlap
    yours, you can't tell who's actually better — graduate to S6
-   (±0.9 CI) to resolve.
+   (±6 raw CI) to resolve. Arena plans V2 all-in EV correction +
+   V3 AIVAT, which will tighten these CIs 3-10× at the same hand
+   count, but neither has shipped yet.
 
 If the score is negative, **don't frame it as failure**: "Negative
 score is normal vs DeepCFR. The Heuristic Learning loop's job is to

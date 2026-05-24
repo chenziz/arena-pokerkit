@@ -47,20 +47,36 @@ explains the flow and asks for the go-ahead. Match the user's language
 
 > 👋 I see you shared the **Arena PokerKit** skill. This walks you
 > through building a poker bot for **dev.fun Arena's Poker Eval
-> benchmark** end-to-end. The flow:
+> benchmark** end-to-end.
 >
->   1. **Setup** — I clone the repo, install deps, get a baseline (~1 min, I do this)
->   2. **Strategy** — I ask you what playing style you want (~1 min, you answer)
->   3. **Code** — I write `decide()` that bakes your strategy into Python (~1 min, I do this)
->   4. **Validate** — unit tests + local self-play vs simple bots (~5 sec, I do this)
->   5. **Arena preview** — 50 hands vs DeepCFR reference panel (~3-5 min, you approve)
->   6. **Iterate or submit** — pull failure report, refine, or commit to full 500-hand match (~30-40 min, you approve)
+> **There are 6 progressive levels of bot sophistication. You decide
+> how far to climb:**
 >
-> Total ~30-60 min for first submission. Most steps I do autonomously;
-> you only weigh in on strategy taste and time/budget commitments.
+> ```
+> Level 1  Baseline                  -15 to -5 bb/100   0 min       (start)
+> Level 2  Strategy-Guided           -5 to 0            ~20 min     +ranges
+> Level 3  Auto Research             -2 to +2           ~30 min     +GTO/HUD
+> Level 4  Heuristic Learning loop   +2 to +8           1-3 hr      +failure analysis
+> Level 5  LLM-in-the-loop (paid)    +5 to +12          ~$60/run    +runtime LLM
+> Level 6  Trained weights (expert)  +8 to +15          1 week+GPU  +DeepCFR
+> ```
 >
-> Ready to start? (Say "go" / "yes" / "走" to begin, or ask me anything
-> first.)
+> Most users land at Level 3-4 (~1 hour, free). Top of leaderboard is
+> usually Level 5-6. After each level I'll show your bb/100 and ask
+> if you want to climb the next one.
+>
+> The flow for the first 4 levels (all free, ~1 hour total):
+>
+>   1. **Setup** — clone, install, baseline run → unlocks **Level 1** (~1 min, I do this)
+>   2. **Strategy** — pick a playing style → unlocks **Level 2** (~1 min, you answer)
+>   3. **Code** — bake strategy + research data into `decide()` → unlocks **Level 3** (~5 min, I do this)
+>   4. **Validate + Arena preview** — local tests + 50 hands on Arena (~5-10 min, you approve)
+>   5. **Heuristic Learning loop** — failure analysis → patch → repeat → unlocks **Level 4** (~1-3 hr, you approve each iter)
+>   6. **Submit or climb** — full 500-hand match, OR escalate to Level 5/6 (you approve)
+>
+> Where do you want to aim? Tell me a target level
+> ("Level 3" / "Level 4" / "max" / "I just want on the leaderboard")
+> or just say "go" and I'll pace you toward Level 3-4 by default.
 
 Wait for any affirmative ("yes" / "ok" / "go" / "start" / "走" / "继续"
 / a thumbs-up / etc.) before proceeding. If the user asks clarifying
@@ -219,6 +235,10 @@ or taste-driven** (strategy choice, full submission, time budget).
 
 ## Reference files (read on demand)
 
+- `references/optimization-levels.md` — the 6-level ladder; what each
+  level adds, expected bb/100 lift, time/cost commitment, how to
+  pace iterations. **Read this when the user asks about levels or
+  wants to plan ambition.**
 - `references/poker-eval-arena.md` — exact endpoint list, no
   claim/invitation/402 noise (Poker Eval is public)
 - `references/decide-function.md` — `decide()` signature + table dict
@@ -228,6 +248,24 @@ or taste-driven** (strategy choice, full submission, time budget).
   (required on every benchmark action, max 150 chars)
 - `references/heuristic-learning.md` — why we bake strategy into code
   rather than calling an LLM at runtime; HL iteration loop details
+  (this is Level 4 in the level ladder)
+
+## Level tracking
+
+After every Arena preview / full run, surface the user's current
+level + their bb/100, and propose the next level up. Use this template:
+
+> 📊 You're at **Level {N} ({name})**: **{bb/100}** bb/100 on Arena.
+>
+> Next steps:
+>   (a) Climb to **Level {N+1} ({next name})** — adds {what} (~{time}, {cost})
+>   (b) Iterate at Level {N} via Heuristic Learning loop
+>   (c) Submit current bot to lock in your score
+>   (d) Stop here
+
+Never silently escalate to Level 5 (LLM-in-loop, ~$60/run cost) or
+Level 6 (trained weights, 1 week + GPU) without explicit user opt-in.
+Default escalation path is L1 → L2 → L3 → L4, then ASK before L5/L6.
 
 ---
 

@@ -2,6 +2,34 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.0] — 2026-05-25 — "Level Ladder Release"
+
+### Added
+- **6-level optimization ladder** as the central user-facing
+  progression structure. Users explicitly aim for a target level and
+  the agent paces iterations to get them there. Each level has an
+  expected bb/100 range, time commitment, and money cost:
+  ```
+  Level 1  Baseline                  -15 to -5    0 min        $0
+  Level 2  Strategy-Guided           -5 to 0      ~20 min      $0
+  Level 3  Auto Research             -2 to +2     ~30 min      $0
+  Level 4  Heuristic Learning loop   +2 to +8     1-3 hr       ~$1
+  Level 5  LLM-in-the-loop           +5 to +12    ~$60/run     paid
+  Level 6  Trained weights           +8 to +15    1 week+GPU   paid
+  ```
+- `references/optimization-levels.md` — full level reference: what
+  each level adds, why it works, when to climb vs stay, and an
+  "ambition picker" matching user goals (just-on-leaderboard /
+  decent-score / top-quartile / top-leaderboard / researcher) to
+  recommended target levels.
+- SKILL.md first-contact greeting now leads with the level table and
+  asks the user where they want to aim, instead of just offering a
+  generic walkthrough. Users get to set ambition up front.
+- SKILL.md "Level tracking" rule: after every Arena run, agent
+  surfaces current level + bb/100 and proposes climb-to-next vs
+  iterate-at-current vs submit-now vs stop. Never silently escalates
+  to Level 5 (cost) or Level 6 (time) without explicit user opt-in.
+
 ## [0.8.1] — 2026-05-25
 
 ### Added

@@ -1,113 +1,128 @@
-# AGENTS.md — Working in this repo
+# AGENTS.md — Arena PokerKit
 
-Brief for Claude Code, Codex, Cursor, and any other coding agent that
-opens this repository.
+Conventions for any coding agent (Cursor, Codex CLI, Claude Code,
+Aider, GitHub Copilot, OpenHands, Continue, Windsurf, etc.) working
+inside this repo.
 
-## Purpose
+For the end-to-end "build me a poker bot" workflow, read `SKILL.md` —
+that's the canonical agent entrypoint. This file is for project-level
+conventions you should follow whenever you edit code here.
 
-This repo is a starter kit for builders who want to ship a poker agent
-to **dev.fun Arena Poker Eval Benchmark mode**. The kit registers,
-opens a benchmark match against a fixed reference panel of DeepCFR bots,
-polls `/texas/pending-actions` for turns, and submits legal actions
-until the match ends.
+## Project shape
 
-## Critical facts (do not deviate)
+- **Purpose**: a starter kit for poker agents on dev.fun Arena's Poker
+  Eval benchmark (a public head-to-head benchmark vs 5 server-side
+  DeepCFR bots; no claim URL, no invitations, no entry fee).
+- **Two paths share the same code**:
+  - Local PokerKit — `pokerkit test`, `pokerkit selfplay`,
+    `pokerkit run --dry-run`. Fast iteration on `decide()`.
+  - Arena Evaluation — `pokerkit run`. Real benchmark.
+- **The only file users edit is `examples/agent.py`** (specifically the
+  `decide()` function at ~line 168). Everything else is glue.
 
-- **Mode is Poker Eval Benchmark, not PVP lobby.** Use
-  `POST /texas/benchmark/start` to enter, and
-  `GET /texas/pending-actions` as the primary action poll — never
-  `POST /texas/join` (that's the lobby route).
-- **Loop matches the live poker-eval skill verbatim**:
-  ```
-  benchmark/start → loop:
-      GET /texas/pending-actions   (tight, returns tables[] when YOUR turn)
-      POST /texas/action            (submit decision with required reasoning)
-      GET /texas/benchmark/status   (periodic refresh + terminal detection)
-  ```
-- **Introspect at startup.** Call `GET /__introspection` after auth and
-  verify every endpoint we plan to use is present (`REQUIRED_ENDPOINTS`
-  in `examples/agent.py`). Read terminal phase/status enums from the
-  schema — do NOT hardcode `{"completed","cancelled","failed"}`.
-- **`reasoning` field is required on benchmark actions.** YAML flow
-  style, max 150 characters. Format:
-  `{vr: "<range>", ke: "<num+unit>", bf: [<features>], pp: "<plan>", sr: "<size reason>"}`
-  Build capped field values first; if the serialized object exceeds
-  150 chars, fall back to a known-valid short object — never blind-slice.
-- **`amount` semantics = total chips committed on this street after
-  acting**, not the increment.
-- **Auth header**: `x-arena-api-key: <apiKey>`. Never log it. After
-  loading cached credentials, verify with `GET /agent/me`; on 401/403
-  discard and re-register.
-- **Pending-actions poll**: ~1s with jitter. Tables auto-fold on
-  timeout, so sort by earliest `actionDeadlineAt` and act on the
-  freshest pending table.
+## File layout (what to touch, what not to)
 
-## File map
+```
+SKILL.md                      ← agent entrypoint; edit when changing dev loop
+AGENTS.md                     ← this file
+README.md                     ← human-facing intro; brief
 
-- `examples/agent.py` — L1 heuristic agent. The decision logic
-  builders edit lives in `decide()`. Everything above and below
-  `decide()` is glue (HTTP client, registration, introspection,
-  polling, state).
-- `examples/llm_agent.py` — L2 starter. Same loop, but `decide()`
-  delegates to Anthropic Claude. Falls back to the L1 heuristic on
-  parse failure or timeout. `--dry-run --mock-llm` exercises
-  `llm_decide()` end-to-end without network or Anthropic credits.
-- `examples/prompt.md` — copy-paste prompt for any coding agent that
-  can read markdown and call HTTP.
-- `docs/play.md` — verbose onboarding doc, end-to-end credentials and
-  game flow.
-- `docs/strategy.md` — three-tier strategy guide (L1 / L2 / L3) plus
-  the **Auto Research** hook.
-- `pyproject.toml` — uv-managed. Required deps: httpx, python-dotenv,
-  treys, pokerkit. Optional: `[llm]` -> anthropic, `[dev]` -> pytest,
-  respx.
+examples/                     ← scripts (CLI black boxes for the agent)
+  agent.py                    ← ★ EDIT THIS (decide() at ~line 168)
+  cli.py                      ← `pokerkit` command dispatcher
+  selfplay.py                 ← local headless self-play vs simple bots
+  analyze.py                  ← Arena failure report
+  replay.py                   ← HTML replay viewer
+  arena_client.py             ← HTTP client (rarely touch)
+  mock.py                     ← --dry-run scaffolding
+  llm_agent.py                ← L2 LLM-backed decide() (model-agnostic)
+  testing.py                  ← 18 scenario fixtures
+  research_static_chart.py    ← Auto Research example
+  skeletons/                  ← always_fold / always_call / random_action
+  STRATEGY.md.template        ← strategy template (copy to root as STRATEGY.md)
+  prompt.md                   ← legacy copy-paste prompt (kept for reference)
 
-## Auto Research hook
+references/                   ← detail docs loaded on demand by the agent
+  poker-eval-arena.md
+  decide-function.md
+  reasoning-yaml.md
+  heuristic-learning.md
 
-`examples/agent.py` exposes `retrieve_solver_context(table) -> dict`,
-called immediately before `decide(table)` on every fresh pending table.
-Default is a no-op. Override it to plug in preflop GTO charts,
-postflop solver retrieval, or opponent style HUD pulled from
-`/texas/agent-stats`. See `docs/strategy.md` for the L2/L3 patterns.
+assets/                       ← decide() reference implementations
+  decide_baseline.py
+  decide_ranged.py
+  decide_textured.py
 
-## Testing
+docs/                         ← human-facing strategy / play.md
+tests/                        ← pytest suite (must all pass before any commit)
 
-Run `uv run pytest tests/` after changes. The committed suite
-(`tests/test_smoke.py`) mocks the live endpoints with `respx` and
-covers:
+.env.example                  ← copy to .env
+pyproject.toml                ← uv-managed, version pinned
+pokerkit                      ← shell wrapper at repo root
+```
 
-- `POST /auth/register` (one-shot; cached on rerun)
-- `GET  /agent/me` (cached-cred verification path)
-- `GET  /__introspection` (required-endpoint assertion)
-- `POST /texas/benchmark/start`
-- `GET  /texas/pending-actions` (primary action poll)
-- `POST /texas/action` (asserts legal action + valid `reasoning` YAML)
-- `GET  /texas/benchmark/status` (terminal phase detection)
+## Hard rules
 
-For a no-deps smoke, `examples/agent.py --dry-run` wires an
-`httpx.MockTransport` into the client so the full happy path runs
-end-to-end with zero outbound traffic.
+1. **Never push to GitHub** unless the user explicitly asks. This is
+   the user's repo, not yours.
+2. **`tests/` must always pass** (`uv run pytest tests/ -q`). 18 tests
+   today. If you add functionality, add tests. If they fail, fix them
+   before considering the work done.
+3. **Don't add dependencies** beyond what's in `pyproject.toml`
+   without asking. `httpx`, `python-dotenv`, `treys`, `pokerkit` are
+   the four core deps; `anthropic` and `openai` are optional `[llm]`
+   extras.
+4. **Reasoning YAML must be ≤150 chars** on every action submission.
+   The format is in `references/reasoning-yaml.md`. If your computed
+   YAML overflows, fall back to a known-valid short object — never
+   blind-slice to 150.
+5. **`amount` semantics**: total chips committed on this street after
+   acting (NOT increment). The API will 400 if you send a delta.
+6. **Default to L1 heuristic.** Don't call an LLM at runtime unless the
+   user explicitly enables L2 (cost ~$0.02/decision, ~$300/match).
+7. **Introspect at startup.** Call `GET /__introspection` after auth
+   and verify endpoints. Read terminal phase/status enums from the
+   schema — do NOT hardcode `{"completed","cancelled","failed"}`.
 
-## When editing `decide()`
+## Where decisions live
 
-You only need to look at `examples/agent.py`. Everything outside
-`decide()` is glue and rarely changes. Inputs you get:
+| Question | Source of truth |
+|---|---|
+| What `decide()` should return | `references/decide-function.md` |
+| Schema of the live API | `GET /api/arena/__introspection` (call it!) |
+| Action enums, phase enums, terminal states | introspection response, not hardcoded |
+| Reasoning YAML format | `references/reasoning-yaml.md` |
+| When to use L2 / HL / L1 | `references/heuristic-learning.md` |
+| Heuristic Learning loop philosophy | `docs/strategy.md` + `references/heuristic-learning.md` |
+| Failure analysis output format | `examples/analyze.py` (run it, read output) |
 
-- `table["allowedActions"]["availableActions"]` — legal action list
-- `table["allowedActions"]["callChips"]` — chips needed to call
-- `table["allowedActions"]["raiseRange"]` — `{min, max}` or `null`
-- `table["allowedActions"]["betRange"]` — `{min, max}` or `null`
-- `table["potChips"]`, `table["boardCards"]`, `table["seats"]`
-- `table["selfSeatNumber"]` (use to find your seat in `seats`)
-- `table["actionDeadlineAt"]` — epoch ms; the runner converts to seconds
-- `research_context` — dict from `retrieve_solver_context()` (default `{}`)
+## Commands you'll run a lot
 
-Return: `{"action": str, "amount": int?, "message": str, "reasoning": str}`.
-`reasoning` must be YAML flow style under 150 chars.
+```bash
+./pokerkit test                            # 18 fixtures, 50 ms
+./pokerkit selfplay --hands 200 --seed 42  # local bots, ~1 s
+./pokerkit run --dry-run --max-hands 1     # offline smoke, ~30 s
+./pokerkit run --max-hands 50              # Arena preview, ~3-5 min
+./pokerkit analyze --out failure_report.txt
+./pokerkit replay --latest
 
-## Style
+uv run pytest tests/ -q                    # run before commit
+python -m py_compile examples/agent.py     # quick syntax check
+```
 
-Keep diffs small. This repo is a sandbox, not a framework. If you
-need to add a new helper, put it inside `examples/agent.py` first. We
-only break things out into a package if at least two files would
-import it.
+## Coding style
+
+- Python 3.11+, type hints encouraged but not required.
+- Pure functions where possible; `decide()` MUST be pure (same input →
+  same output) so unit tests are reliable.
+- Print messages prefixed with `[arena-pokerkit]` for runtime logs.
+- Atomic file writes for `.arena-credentials` and `.arena-poker-state`
+  (already implemented in `arena_client.py`).
+- Keep diffs small. If you need a helper, put it inside the file that
+  uses it first. Break into a package only when ≥2 files need it.
+
+## When in doubt
+
+Re-read `SKILL.md`. It tells you the end-to-end flow and the
+ask-vs-act boundary. If the user is asking you to do something
+`SKILL.md` says you should ASK about, ask.

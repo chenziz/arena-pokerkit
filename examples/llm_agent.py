@@ -98,39 +98,91 @@ def _maybe_mock_anthropic_module():
     return _Mod()
 
 
+def _call_llm(system: str, user: str, max_tokens: int,
+              model_hint: Optional[str], mock_mod=None) -> Optional[str]:
+    """Model-agnostic LLM call. Returns text on success, None on failure.
+
+    Selection order:
+      1. --mock-llm (via mock_mod) — for offline tests
+      2. ANTHROPIC_API_KEY → anthropic SDK (Claude Sonnet/Opus/Haiku)
+      3. OPENAI_API_KEY → openai SDK (GPT-5/4o/4-mini, or any chat-completions
+         compatible endpoint via OPENAI_BASE_URL)
+
+    `model_hint` lets the caller pick a specific model; default falls back
+    to a sensible mid-tier choice per provider.
+    """
+    # 1. --mock-llm path
+    if mock_mod is not None:
+        client = mock_mod.Anthropic()
+        resp = client.messages.create(
+            model="mock", max_tokens=max_tokens, system=system,
+            messages=[{"role": "user", "content": user}])
+        return "".join(getattr(b, "text", "") for b in resp.content
+                       if getattr(b, "type", None) == "text").strip()
+
+    # 2. Anthropic path
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        try:
+            import anthropic  # type: ignore
+            client = anthropic.Anthropic()
+            resp = client.messages.create(
+                model=model_hint or "claude-sonnet-4-7",
+                max_tokens=max_tokens, system=system,
+                messages=[{"role": "user", "content": user}])
+            return "".join(getattr(b, "text", "") for b in resp.content
+                           if getattr(b, "type", None) == "text").strip()
+        except Exception:
+            return None
+
+    # 3. OpenAI path (also works for OpenAI-compatible endpoints via OPENAI_BASE_URL:
+    #    OpenRouter, Together, Groq, vLLM, etc.)
+    if os.environ.get("OPENAI_API_KEY"):
+        try:
+            from openai import OpenAI  # type: ignore
+            client = OpenAI()
+            resp = client.chat.completions.create(
+                model=model_hint or "gpt-5",
+                max_completion_tokens=max_tokens,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ])
+            return (resp.choices[0].message.content or "").strip()
+        except Exception:
+            return None
+
+    return None
+
+
 def llm_decide(table: dict, deadline_s: float = 10.0,
-               model: str = "claude-sonnet-4-5",
+               model: Optional[str] = None,
                max_tokens: int = 800,
                research_context: Optional[dict] = None) -> dict:
-    """Ask Claude for an action. Fall back to heuristic on any failure.
+    """Ask an LLM for an action. Fall back to heuristic on any failure.
+
+    Model-agnostic: picks the first available backend among:
+      - --mock-llm (in-process mock for tests)
+      - Anthropic SDK (if ANTHROPIC_API_KEY is set)
+      - OpenAI SDK (if OPENAI_API_KEY is set; also covers OpenAI-compatible
+        endpoints like OpenRouter / Together / Groq / vLLM via OPENAI_BASE_URL)
 
     research_context is the dict returned by retrieve_solver_context(table)
     — preflop chart, postflop solver frequencies, opponent stats. When
     non-empty, it's serialized into the user prompt as extra context."""
     mock_mod = _maybe_mock_anthropic_module()
-    if mock_mod is not None:
-        anthropic = mock_mod  # type: ignore
-    else:
-        try:
-            import anthropic  # type: ignore
-        except ImportError:
-            return heuristic_decide(table, deadline_s=deadline_s,
-                                    research_context=research_context)
-
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not api_key:
-            return heuristic_decide(table, deadline_s=deadline_s,
-                                    research_context=research_context)
+    has_provider = (
+        mock_mod is not None
+        or os.environ.get("ANTHROPIC_API_KEY")
+        or os.environ.get("OPENAI_API_KEY")
+    )
+    if not has_provider:
+        return heuristic_decide(table, deadline_s=deadline_s,
+                                research_context=research_context)
 
     if deadline_s < 3.0:
         # Not enough time for an LLM round-trip; use the local heuristic.
         return heuristic_decide(table, deadline_s=deadline_s,
                                 research_context=research_context)
-
-    if mock_mod is not None:
-        client = anthropic.Anthropic()
-    else:
-        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
     prompt = "TABLE STATE:\n" + json.dumps(_compact_table(table), separators=(",", ":"))
     if research_context:
@@ -138,36 +190,27 @@ def llm_decide(table: dict, deadline_s: float = 10.0,
                    + json.dumps(research_context, separators=(",", ":")))
     prompt += "\n\nRespond with ONLY the JSON action object on the last line."
 
-    try:
-        resp = client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        text = "".join(
-            getattr(b, "text", "") for b in resp.content
-            if getattr(b, "type", None) == "text"
-        ).strip()
-        action = _parse_action_json(text)
-        if action is None:
-            return heuristic_decide(table, deadline_s=deadline_s,
-                                    research_context=research_context)
-        action = _validate_against_allowed(action, table)
-        # Validate reasoning shape — blind truncation can produce invalid
-        # YAML flow and get rejected by the benchmark server.
-        reasoning = action.get("reasoning", "") or ""
-        if not (reasoning.startswith("{") and reasoning.endswith("}")
-                and len(reasoning) <= 150
-                and all(k in reasoning for k in ("vr:", "ke:", "pp:"))):
-            action["reasoning"] = _build_reasoning(
-                action.get("action", "fold"),
-                0.0, 0.0, table, table.get("allowedActions") or {},
-            )
-        return action
-    except Exception:
+    text = _call_llm(SYSTEM_PROMPT, prompt, max_tokens, model, mock_mod)
+    if not text:
         return heuristic_decide(table, deadline_s=deadline_s,
                                 research_context=research_context)
+
+    action = _parse_action_json(text)
+    if action is None:
+        return heuristic_decide(table, deadline_s=deadline_s,
+                                research_context=research_context)
+    action = _validate_against_allowed(action, table)
+    # Validate reasoning shape — blind truncation can produce invalid
+    # YAML flow and get rejected by the benchmark server.
+    reasoning = action.get("reasoning", "") or ""
+    if not (reasoning.startswith("{") and reasoning.endswith("}")
+            and len(reasoning) <= 150
+            and all(k in reasoning for k in ("vr:", "ke:", "pp:"))):
+        action["reasoning"] = _build_reasoning(
+            action.get("action", "fold"),
+            0.0, 0.0, table, table.get("allowedActions") or {},
+        )
+    return action
 
 
 def _compact_table(table: dict) -> dict:

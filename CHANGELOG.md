@@ -2,6 +2,61 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.0] — 2026-05-25 — "Skill-First Release"
+
+This is a **major positioning shift**. PokerKit was previously a Python
+repo with a CLI users ran by hand. It is now an **agent skill** —
+canonical entrypoint is `SKILL.md`, any agent (Claude Code, Codex CLI,
+Cursor, Gemini CLI, Copilot, OpenHands, Aider, Windsurf, ...) can read
+it and drive the full dev loop end-to-end, asking the user only at
+strategy and submission decision points.
+
+### Added
+- `SKILL.md` — agent entrypoint with frontmatter (name, description,
+  license), step-by-step phase flow (Setup → Baseline → Strategy →
+  Code → Local validation → Arena validation → Iterate/Submit), and
+  an explicit ASK vs ACT table. Modeled on Anthropic Skills format
+  (agentskills.io open standard, supported by 35+ coding agents).
+- `AGENTS.md` — project-level conventions for any agent editing the
+  repo (file layout, hard rules, where decisions live, commands).
+- `references/` — detail docs loaded on demand by the agent:
+  - `poker-eval-arena.md` — exact 7 endpoints, no claim/invite/402
+    branches (Poker Eval is a public benchmark)
+  - `decide-function.md` — `decide()` signature, `table` dict schema,
+    worked AKs UTG example, action semantics gotcha
+  - `reasoning-yaml.md` — YAML format spec, 5 fields, overflow handling
+  - `heuristic-learning.md` — why we bake strategy into code rather
+    than calling an LLM at runtime; HL iteration cadence; when to ASK
+- `assets/` — 3 reference `decide()` implementations the agent can
+  copy as starting points:
+  - `decide_baseline.py` — pot odds + hand-class strength
+  - `decide_ranged.py` — adds `OPENING_RANGES` per position
+  - `decide_textured.py` — adds board-texture-aware sizing
+  Each is a runnable `--agent` target via `pokerkit selfplay --agent
+  assets/decide_*.py`.
+
+### Changed
+- **L2 (`examples/llm_agent.py`) is now model-agnostic.** New
+  `_call_llm()` adapter picks the first available provider in this
+  order: `--mock-llm` (tests) → Anthropic SDK (`ANTHROPIC_API_KEY`)
+  → OpenAI SDK (`OPENAI_API_KEY`). The OpenAI path also covers
+  OpenAI-compatible endpoints (OpenRouter, Together, Groq, vLLM)
+  via `OPENAI_BASE_URL`. `model` kwarg accepts any model name; the
+  default is `claude-sonnet-4-7` (Anthropic) or `gpt-5` (OpenAI).
+- `pyproject.toml`: `[llm]` extras now ship both `anthropic>=0.40`
+  and `openai>=1.0`.
+- README repositioned around the SKILL.md entrypoint. Top section
+  now says: "This is an agent skill. Paste the URL into your coding
+  agent." Manual CLI instructions remain for inspection.
+
+### Migration note
+Current home is `github.com/chenziz/arena-pokerkit`. The dev team
+will migrate the entire contents into
+`github.com/devfun-org/devfun-arena-skills/skills/arena-pokerkit/`
+as a sibling to the existing `devfun-arena` skill (pump.fun
+predictions), so a single `npx skills add devfun-org/devfun-arena-skills`
+gives users both skills.
+
 ## [0.7.0] — 2026-05-24 — "Local Self-Play Release"
 
 ### Added

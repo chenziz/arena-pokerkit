@@ -1,0 +1,121 @@
+# Heuristic Learning — why we bake strategy into code
+
+> "Maybe heuristics were not too weak. Maybe they were just too
+> expensive to maintain. Maybe it's the next paradigm."
+> — Jiayi Weng (OpenAI, post-training RL infra)
+> https://trinkle23897.github.io/learning-beyond-gradients/
+
+## TL;DR
+
+**Heuristic Learning (HL)** = use a coding agent (Claude Code, Codex,
+Cursor, ...) to write and refine the Python `decide()` function
+offline. The deployed bot is pure code. **Zero LLM calls at runtime.**
+
+This is different from L2 (LLM-in-the-loop), where an LLM is called
+at every action. HL is faster, cheaper, deterministic, and the
+ceiling is as high as you program it.
+
+## Three roles for an LLM (don't conflate)
+
+| Role | Where | When called | Cost / hand |
+|---|---|---|---|
+| **L1 default** | `examples/agent.py decide()` | runtime | $0 |
+| **L2 LLM-in-loop** | `examples/llm_agent.py decide()` | runtime, every action | ~$0.02 |
+| **HL coder** | Your coding agent edits `examples/agent.py` | dev time only | dev-tool cost |
+
+HL is the recommended path. L2 is offered as a starter for users who
+want max strategic depth at runtime cost (~$300 / 500-hand match).
+
+## The HL loop
+
+```text
+1. STRATEGY     Fill in STRATEGY.md (taste-driven, you write this)
+2. CODE         Coding agent reads STRATEGY.md + decide-function.md,
+                edits examples/agent.py decide() to bake rules
+3. TEST         ./pokerkit test              (18 fixtures, 50 ms)
+4. SELFPLAY     ./pokerkit selfplay --hands 200 --seed 42  (~1 s)
+                → compare bb/100 vs previous run
+5. ARENA        ./pokerkit run --max-hands 50              (~3-5 min)
+                → real bb/100 vs DeepCFR panel
+6. ANALYZE      ./pokerkit analyze --out failure_report.txt
+                → which positions/hands lost the most chips?
+7. LOOP         feed failure_report.txt back to coding agent → step 2
+```
+
+## Why baked-in code beats runtime LLM
+
+- **Speed.** Pure Python: microseconds per decision. LLM: 2-10 seconds.
+  Poker Eval has a 20-second deadline; LLM can run out.
+- **Cost.** $0 vs ~$0.02 per decision. A 500-hand match is ~$300 in
+  L2 LLM costs; HL is free at runtime.
+- **Determinism.** Same input → same output. Tests are reliable.
+  LLM sampling is stochastic, hard to regression-test.
+- **Inspectability.** You can read the code and understand exactly
+  why the bot did X. LLM reasoning is opaque.
+- **Adaptability.** Want to change behavior? Edit the code, run
+  `pokerkit test`. With L2, you have to re-prompt + re-eval.
+
+## What to bake into `decide()` (what HL produces)
+
+Typical things a coding agent encodes into pure Python:
+
+| Pattern | Example |
+|---|---|
+| Position-aware opening ranges | `UTG_OPEN = {"AA","KK","QQ","JJ","TT","AKs","AKo","AQs"}` |
+| Position-aware defending ranges | `BB_DEFEND_VS_BTN = UTG_OPEN \| {"99","88","77","66","KQs","KJs","QJs","JTs"}` |
+| Board-texture detection | `is_dry_board(board) = monotone_count <= 1 and not draw_heavy` |
+| Sizing tables | `flop_cbet = {dry: 0.33 * pot, wet: 0.66 * pot}` |
+| Hand-strength classes | `pair = hole[0][0] == hole[1][0]`, `top_pair = hero_rank == max(board_ranks)` |
+| Opponent profile classes | `vs_loose if villain_vpip > 40 else vs_tight` |
+| Deadline fallback | `if deadline_s < 2: return safe_option(table)` |
+
+All of these are deterministic, fast, inspectable, and testable. None
+require a runtime LLM.
+
+## When HL stops being enough
+
+The HL ceiling is around `+5 to +10 bb/100` vs the DeepCFR panel —
+strong but not solver-level. To go higher, you need one of:
+
+1. **L2 with research context.** Pass GTOWizard / TexasSolver outputs
+   into the LLM at runtime. Costs ~$300/match.
+2. **L3 trained weights.** DeepCFR / NFSP / CFR+ trained on labeled
+   spots. Runs at $0/match but takes ~1 week to train + needs a
+   GPU. See `docs/strategy.md` "L3 — Trained weights".
+3. **Solver lookup table.** Pre-solve canonical spots offline, ship
+   the lookup. Bake the table into Python via HL — same paradigm,
+   richer data.
+
+The Poker Eval leaderboard's top is in solver-lookup / DeepCFR
+territory. HL is enough to be competitive in the top quartile.
+
+## Iteration cadence
+
+A typical HL session looks like:
+
+```
+iter 0  baseline (L1 default)        -12.3 bb/100  vs DeepCFR
+iter 1  add OPENING_RANGES            -4.1
+iter 2  add board-texture cbet        +1.8
+iter 3  add opponent HUD adjustment   +5.2
+iter 4  tighten 3-bet defense          +5.4   ← plateau
+```
+
+4-5 iterations, 4-6 hours of dev time, ~$0.50 of Arena API calls
+(50-hand previews × 4-5 iterations).
+
+## When to ASK the user (during HL)
+
+The coding agent should ASK the user at:
+
+- **Strategy taste** — "Tight-aggressive vs loose-aggressive?"
+- **Validation timing** — "Run 50-hand Arena preview now (3-5 min)?"
+- **Submission approval** — "Submit full 500-hand match (~30-40 min)?"
+- **Iteration stop** — "bb/100 plateaued at +5.4. Stop here?"
+
+And ACT (without asking) on:
+
+- Editing `examples/agent.py decide()`
+- Running `pokerkit test` / `pokerkit selfplay`
+- Running `pokerkit analyze`
+- Reading reference files in `references/` and `assets/`

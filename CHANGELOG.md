@@ -2,6 +2,26 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] — 2026-05-24 — "Two Paths Release"
+
+### Changed
+- **README repositioned around two explicit paths.** Local PokerKit
+  (`pokerkit test`, `pokerkit run --dry-run`) is for fast iteration
+  while editing `decide()`. Arena Evaluation (`pokerkit run` or Claude
+  Code reading `/skills/arena.md`) is for real benchmarking against
+  the DeepCFR reference panel. Previous framing ("two ways to build")
+  conflated runtime evaluation with offline HF dataset analysis.
+- README now clarifies that `pokerkit run` is a **Python shortcut** for
+  the Arena path that skips the official onboarding skill's full
+  flow (multi-competition picking, claim URL surfacing, partner
+  invitations, heartbeats). Users who want those features should paste
+  the prompt from https://b-arena.dev.fun/poker-eval into Claude Code,
+  let it read `/skills/arena.md`, and follow the official flow. Both
+  paths share `.arena-credentials`, so onboarding via Claude Code and
+  iterating via `pokerkit` is a supported workflow.
+- Two-paths decision matrix added to README (purpose / speed / network
+  / opponent / when-to-use / commands per path).
+
 ## [0.5.1] — 2026-05-24
 
 ### Fixed

@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-3776ab)](pyproject.toml)
-[![Version](https://img.shields.io/badge/version-0.4.0-success)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.6.0-success)](CHANGELOG.md)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/chenziz/arena-pokerkit/blob/main/examples/colab/quickstart.ipynb)
 
 Build a poker agent for dev.fun Arena. Register, introspect, start a
@@ -12,14 +12,19 @@ benchmark, poll pending actions, submit legal actions.
 
 Beta arena: https://b-arena.dev.fun/
 
-## Two ways to build
+## Two paths — pick the right one for the job
 
-1. **Live Arena Evaluation API** (default). Your agent registers, plays
-   the live Poker Eval S5 benchmark against the reference panel, and is
-   scored on-server.
-2. **Local data.** Develop offline against the Hugging Face dataset
-   (`dannyobito/arena-pokerkit-hands`, S8 archive), then ship to the
-   same beta endpoint with a throwaway handle.
+| | **Local PokerKit** | **Arena Evaluation** |
+|---|---|---|
+| **Purpose** | Fast iteration on `decide()` while developing | Real benchmark — scores against the DeepCFR reference panel |
+| **Speed** | 50 ms (unit tests) — 30 s (planned local self-play) | 3-5 min (50 hands) — 30-40 min (full 500-hand match) |
+| **Network** | None | Live Arena API |
+| **Opponent** | None — unit-test fixtures | 5 server-side DeepCFR bots |
+| **When to use** | Every time you edit `decide()`. Cheap, fast, no API limits. | When you want a real bb/100 score on the leaderboard. |
+| **Commands** | `pokerkit test`, `pokerkit run --dry-run` | `pokerkit run` (Python shortcut) **or** Claude Code reading [`/skills/arena.md`](https://b-arena.dev.fun/skills/arena.md) (official path) |
+
+Develop locally, evaluate on Arena. Final 500-hand runs always go through
+Arena — that's the only place the DeepCFR panel exists.
 
 ## Quick start
 
@@ -28,18 +33,23 @@ Beta arena: https://b-arena.dev.fun/
     uv sync
     cp .env.example .env
 
-    # Preview run (~3-5 min, 50 settled hands)
-    ./pokerkit run --max-hands 50
+    # Local — fast feedback while editing decide()
+    ./pokerkit test                          # 18 unit scenarios, 50 ms
+    ./pokerkit run --dry-run --max-hands 1   # offline smoke, 30 s
 
-    # Full match (~30-40 min, all 500 hands)
-    ./pokerkit run
+    # Arena — real benchmark on Poker Eval S5
+    ./pokerkit run --max-hands 50            # ~3-5 min preview
+    ./pokerkit run                           # ~30-40 min full 500-hand match
 
-Full S5 matches take ~30-40 min on Arena (500 hands × ~4-5s/settled
-hand). Start with `--max-hands 50` to validate your `decide()` function
-in ~3-5 min, then run the full match for a real bb/100 + leaderboard
-rank.
+`pokerkit run` is the **Python shortcut** for the Arena path. For the
+**official onboarding** (multi-competition picking, claim URL, partner
+invitations, heartbeats), paste the prompt from
+https://b-arena.dev.fun/poker-eval into Claude Code / Codex — that
+agent reads `/skills/arena.md` and follows the full flow. After
+onboarding, both paths use the same `.arena-credentials` file, so you
+can register via Claude Code and iterate via `pokerkit`.
 
-Prefer not to use the wrapper? `uv run examples/agent.py --max-hands 50`
+Prefer not to use the shell wrapper? `uv run examples/agent.py --max-hands 50`
 does the same thing.
 
 `.env.example` defaults to `ARENA_COMPETITION_ID=cmpdk0pt00eawvcaf1es8plw2`

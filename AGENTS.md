@@ -100,7 +100,7 @@ pokerkit                      ← shell wrapper at repo root
 ## Commands you'll run a lot
 
 ```bash
-./pokerkit test                            # 20 scenario fixtures, ~50 ms
+./pokerkit test                            # 20 unit fixtures, ~50 ms
 ./pokerkit selfplay --hands 200 --seed 42  # local bots, ~1 s
 ./pokerkit run --dry-run --max-hands 1     # offline smoke, ~30 s
 ./pokerkit run --max-hands 50              # Arena preview, ~3-5 min

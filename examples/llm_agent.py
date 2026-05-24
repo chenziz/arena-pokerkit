@@ -373,7 +373,9 @@ def _validate_against_allowed(action: dict, table: dict) -> dict:
 
 def main(argv: Optional[list[str]] = None) -> int:
     global _MOCK_LLM
-    parser = argparse.ArgumentParser(description="Arena PokerKit L2 LLM agent")
+    parser = argparse.ArgumentParser(
+        description="Arena PokerKit — Level 5 runtime-LLM agent "
+                    "(model-agnostic: Anthropic / OpenAI / OpenAI-compat)")
     parser.add_argument("--competition-id", default=None)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--dry-run-scenario",

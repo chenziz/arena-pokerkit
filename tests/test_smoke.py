@@ -350,6 +350,49 @@ def test_dry_run_does_not_hit_production():
     assert leak.call_count == 0, "dry-run leaked to production"
 
 
+def test_state_migration_from_v0_11_schema(tmp_path, monkeypatch):
+    """v0.12.0 added `iterations` to .arena-poker-state. State files
+    written by v0.11.0 (no `iterations` key) must load cleanly and the
+    key must default to []. New entries via append_iteration() must
+    persist in order and increment `iter`."""
+    monkeypatch.chdir(tmp_path)
+
+    # Simulate a v0.11-era state file.
+    legacy = {
+        "hands_played": 42,
+        "bankroll": 100,
+        "last_action": {"action": "call", "amount": 50, "at": 1700000000},
+        "timeout_count": 0,
+        "rejection_count": 1,
+        "stale_count": 2,
+    }
+    arena_client_mod.STATE_PATH.write_text(json.dumps(legacy))
+
+    state = arena_client_mod.load_state()
+    assert state["iterations"] == [], "iterations must default to [] on v0.11 state"
+    assert state["hands_played"] == 42, "legacy keys must survive migration"
+    assert state["rejection_count"] == 1
+
+    # append_iteration assigns sequential `iter` and timestamp.
+    arena_client_mod.append_iteration({
+        "bb_per_100": -61.7, "hands": 51,
+        "decide_version": "TAG iter 0",
+    })
+    arena_client_mod.append_iteration({
+        "bb_per_100": -8.3, "hands": 500,
+        "decide_version": "conservative iter 1",
+    })
+
+    final = arena_client_mod.load_state()
+    iters = final["iterations"]
+    assert len(iters) == 2
+    assert iters[0]["iter"] == 0 and iters[1]["iter"] == 1
+    assert iters[0]["bb_per_100"] == -61.7
+    assert iters[1]["bb_per_100"] == -8.3
+    # Timestamp present and ISO-ish.
+    assert iters[0]["ts"].endswith("Z") and "T" in iters[0]["ts"]
+
+
 def test_introspection_missing_endpoints_fails_loud():
     """If introspection is missing a required endpoint, we must SystemExit
     rather than continuing on a moved API."""

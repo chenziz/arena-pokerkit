@@ -249,12 +249,7 @@ def load_or_register(client: ArenaClient, handle: str, name: str, quote: str) ->
     return body if isinstance(body, dict) else {}
 
 
-def load_state() -> dict:
-    if STATE_PATH.exists():
-        try:
-            return json.loads(STATE_PATH.read_text())
-        except Exception:
-            pass
+def _default_state() -> dict:
     return {
         "hands_played": 0,
         "bankroll": 0,
@@ -262,11 +257,69 @@ def load_state() -> dict:
         "timeout_count": 0,
         "rejection_count": 0,
         "stale_count": 0,
+        "iterations": [],
     }
+
+
+def load_state() -> dict:
+    """Load .arena-poker-state with schema migration.
+
+    v0.12.0 added `iterations: list[dict]` (per-Arena-run score history).
+    Older state files (v0.11 and earlier) lack this key; we default it to
+    [] so the read path keeps working without a manual reset. All other
+    legacy keys are preserved as-is."""
+    if STATE_PATH.exists():
+        try:
+            state = json.loads(STATE_PATH.read_text())
+            if isinstance(state, dict):
+                # v0.12 migration: ensure iterations key exists.
+                if "iterations" not in state or not isinstance(
+                        state.get("iterations"), list):
+                    state["iterations"] = []
+                # Fill in any other missing defaults so callers don't KeyError.
+                for k, v in _default_state().items():
+                    state.setdefault(k, v)
+                return state
+        except Exception:
+            pass
+    return _default_state()
 
 
 def save_state(state: dict) -> None:
     _atomic_write(STATE_PATH, json.dumps(state, indent=2))
+
+
+def append_iteration(entry: dict) -> dict:
+    """Append a single iteration record to .arena-poker-state['iterations']
+    atomically. Returns the updated state dict so callers can inspect the
+    iteration count / previous entries.
+
+    Entry shape (v0.12.0):
+      {
+        "iter": int,              # 0-indexed iteration number
+        "ts": "ISO-8601 string",  # UTC timestamp
+        "bb_per_100": float|None, # adjusted bb/100 (None if missing)
+        "hands": int|None,        # completed hands this run
+        "decide_version": str,    # short label for the decide() variant
+      }
+
+    Caller supplies `bb_per_100`, `hands`, `decide_version`; this helper
+    fills in `iter` (next sequential) and `ts` if missing.
+    """
+    state = load_state()
+    iters = state.get("iterations") or []
+    if not isinstance(iters, list):
+        iters = []
+    record = dict(entry)
+    record.setdefault("iter", len(iters))
+    if "ts" not in record:
+        import datetime as _dt
+        record["ts"] = _dt.datetime.now(_dt.timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ")
+    iters.append(record)
+    state["iterations"] = iters
+    save_state(state)
+    return state
 
 
 def _atomic_write(path: Path, contents: str) -> None:

@@ -43,6 +43,7 @@ from arena_client import (
     ArenaClient,
     ArenaError,
     DEFAULT_BASE,
+    append_iteration,
     assert_endpoints,
     fetch_introspection,
     load_or_register,
@@ -632,6 +633,31 @@ def _run_benchmark_loop(
                           f"{json.dumps(match, sort_keys=True)}")
                     state["bankroll"] = int(match.get("rawChipDelta") or 0)
                     save_state(state)
+
+                    # v0.12.0: record per-iteration trajectory entry so the
+                    # skill can compute plateau / climb signals across runs.
+                    try:
+                        bb = match.get("adjustedBbPer100")
+                        bb_val = float(bb) if bb is not None else None
+                    except (TypeError, ValueError):
+                        bb_val = None
+                    try:
+                        hands_val = int(match.get("completedHands") or 0)
+                    except (TypeError, ValueError):
+                        hands_val = None
+                    decide_version = os.environ.get(
+                        "ARENA_DECIDE_VERSION", "decide() iter")
+                    try:
+                        append_iteration({
+                            "bb_per_100": bb_val,
+                            "hands": hands_val,
+                            "decide_version": decide_version,
+                            "phase": match.get("phase"),
+                            "status": match.get("status"),
+                        })
+                    except Exception as _e:
+                        print(f"[arena-pokerkit{label}] could not record "
+                              f"iteration: {_e}", file=sys.stderr)
                     return 0
 
         if not tables:

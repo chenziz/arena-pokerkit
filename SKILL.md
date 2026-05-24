@@ -229,36 +229,99 @@ Reminder: don't run small Arena previews for iteration — that's what
 When it completes, **always** report the score using the 4-line
 "Score interpretation" template below.
 
-## Step 6: Iterate or submit (ASK — one recommendation, not a menu)
+## Step 6: Iterate or climb (ASK — one recommendation, not a menu)
 
-Show the user the score using the 4-line template, then make **one
-concrete recommendation**:
+Read `.arena-poker-state` first — the `iterations` array holds the
+per-Arena-run trajectory the agent records on every terminal state
+(v0.12.0+). Use it for the score template *variant* and the
+recommendation logic.
+
+### Score template variant
+
+- **`iterations` has length ≤ 1 (this is the first Arena run):**
+  use the **full 4-line "Score interpretation"** template (raw / what
+  bb/100 means / why local ≠ Arena / where you sit).
+- **`iterations` has length ≥ 2 (subsequent runs):** use the short
+  trajectory format — the user already knows the anchors.
+
+Subsequent-run trajectory format:
 
 ```
-Arena result: {arena_score} bb/100 (over {hands} hands vs DeepCFR panel).
+🎯 Heuristic Learning Round {prev_iter} → Round {iter}:
 
-{4-line Score interpretation, see below}
+   {prev_score}  →  {current_score}  bb/100   ({+/-}{delta})
 
-I recommend: **{recommended action}**. Say "go" to continue, or
-"stop" / "submit" / "let me decide" to do something else.
+We're in the Heuristic Learning loop — each round I find one losing
+pattern and patch it. Continue until plateau, then climb the ladder.
 ```
 
-Default recommendation logic:
+### Plateau / climb signal
 
-- **Score < -20 bb/100 (way below baseline range):** "I'll pull the
-  failure report and propose specific patches" → run
-  `./pokerkit analyze --out failure_report.txt`, identify patterns,
-  patch `decide()`, loop to Step 4.
-- **Score within or above the typical baseline band:** "Submit the
-  full match to lock in your score, or iterate one more pass for a
-  higher final."
-- **Score plateaued vs previous iteration:** "We've plateaued. I
-  recommend submitting."
+Compute from the last two iteration entries:
+
+- `delta = current.bb_per_100 - prev.bb_per_100`
+- **Plateaued:** the **last two** deltas are both `< +2 bb/100`
+- **Band climb:** current crosses into a higher Level band than prev
+  (bands: ≤-15 L1, -15..-5 L1, -5..0 L2, 0..+2 L3, +2..+8 L4,
+  +8..+15 L5-6) — still room for one more iter to confirm
+- **Overdue climb:** three consecutive iterations with delta `< +2`
+  → stop iterating, climb is overdue
+
+Recommendation logic — pick ONE and surface it:
+
+```
+Iteration tracking → recommendation:
+  Iteration 1 (first Arena):        Recommend: iterate (most users have room here)
+  Iteration 2..N, still climbing:   Recommend: iterate one more round
+  Iteration with delta < +2:        Recommend: CLIMB to next Level (specify which)
+  3 iterations with delta < +2:     Recommend: STOP iterating, climb is overdue
+```
+
+The agent says explicitly:
+
+> 📊 Your scores: -61.7 → -8.3 → -6.1 (delta +2.2 this round, getting
+> close to plateau)
+>
+> One more round should push past 0. Then we should **climb to Level
+> 3 (Auto Research)** — that's where the next +5-10 bb/100 lives.
+> Iterate one more, then climb?
+
+For the "way below baseline" tail case (current score `< -20 bb/100`
+and no prior iteration to compare against), keep the v0.11 behavior:
+"I'll pull the failure report and propose specific patches" → run
+`./pokerkit analyze --out failure_report.txt`, identify patterns,
+patch `decide()`, loop to Step 4.
 
 For users who say "let me decide", link to
 `references/optimization-levels.md` for the full menu (climb to
-Level 3/4/5/6, iterate, submit, stop). Never escalate to Level 5/6
-silently.
+Level 3/4/5/6, iterate, lock in score, stop). Never escalate to
+Level 5/6 silently.
+
+### "You are here" Level ladder panel (always show after iteration 1+)
+
+Whenever the agent surfaces an Arena score on iteration 2 or later,
+also print the ladder panel below. It gives the user a visible
+"climbing" feedback loop and makes "next step" concrete instead of
+vague. Fill the markers (`✓` done, `◐` next, `○` locked) based on
+which Levels have been completed in the user's history and which
+Level they currently target. HL loop is **iteration within a level**,
+not a level of its own.
+
+```
+You are here:
+  ✓ Level 1 — Baseline (done — passed setup)
+  ✓ Level 2 — Strategy-Guided (done — your tight-aggressive style baked in)
+  ◐ Level 3 — Auto Research (next stop — adds GTO chart + opponent HUD)
+  ○ Level 4 — Heuristic Learning loop (you're currently here, iterating within Level 2)
+  ○ Level 5 — LLM-in-loop (paid, optional)
+  ○ Level 6 — Trained weights (expert, optional)
+
+Current iteration: {iter}/{recommended_max=5}
+Current score: {bb/100}  → plateau threshold: {recent_delta_avg}
+```
+
+"Next step after plateau" = **climb to the next FEATURE LEVEL** (L3
+if not done, then L5/L6) — never just "iterate again forever".
 
 ## Score interpretation (use whenever surfacing an Arena bb/100)
 
@@ -351,16 +414,10 @@ or taste-driven** (strategy choice, full submission, time budget).
 
 ## Level tracking
 
-After every Arena preview / full run, surface the user's current
-level + their bb/100, and propose the next level up. Use this template:
-
-> 📊 You're at **Level {N} ({name})**: **{bb/100}** bb/100 on Arena.
->
-> Next steps:
->   (a) Climb to **Level {N+1} ({next name})** — adds {what} (~{time}, {cost})
->   (b) Iterate at Level {N} via Heuristic Learning loop
->   (c) Submit current bot to lock in your score
->   (d) Stop here
+The "You are here" ladder panel in Step 6 is the canonical level-tracking
+surface as of v0.12.0. After every Arena terminal state the agent reads
+`.arena-poker-state['iterations']` and shows the panel + a single
+concrete recommendation (NOT a menu of 4 options).
 
 Never silently escalate to Level 5 (LLM-in-loop, paid — cost varies
 by model + token usage) or Level 6 (trained weights, 1 week + GPU)

@@ -2,6 +2,101 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.12.0] — 2026-05-25 — "Plateau & Trajectory — give the user a stopping signal"
+
+A second dogfood run with a real user exposed the next UX gap: after
+Phase 4 the skill asks "iterate again or submit?" with no objective
+stopping signal, so a user keeps looping the Heuristic Learning round
+forever. And "next step" was vague — submit? iterate? climb? This
+release answers all three with iteration tracking, a trajectory-style
+score report, a plateau rule, and a permanent "You are here" Level
+ladder panel.
+
+### Added — per-iteration tracking in `.arena-poker-state`
+
+- **New `iterations: list[dict]` field** in `.arena-poker-state`.
+  Every time `examples/agent.py` reaches a terminal match phase it
+  appends a record:
+
+  ```json
+  {"iter": 0, "ts": "2026-05-25T05:44:00Z", "bb_per_100": -61.7,
+   "hands": 51, "decide_version": "TAG iter 0",
+   "phase": "completed", "status": "Completed"}
+  ```
+
+  Persisted atomically via `arena_client.append_iteration(entry)`.
+  `decide_version` is sourced from the `ARENA_DECIDE_VERSION` env var
+  (default `"decide() iter"`); set it per-iteration to label what
+  changed.
+- **State-file schema migration.** v0.11-era state files (no
+  `iterations` key) now load cleanly — `load_state` defaults the key
+  to `[]` and fills in any other missing defaults. No manual reset
+  needed when upgrading.
+
+### Added — trajectory-style score report for iterations 2+
+
+- **SKILL.md "Score template variant"** splits Step 6's score report
+  into two shapes based on `len(iterations)`:
+  - First Arena run → full 4-line "Score interpretation" (unchanged
+    from v0.11).
+  - Subsequent runs → short trajectory format:
+    ```
+    🎯 Heuristic Learning Round {prev_iter} → Round {iter}:
+       {prev_score}  →  {current_score}  bb/100   ({+/-}{delta})
+    ```
+  The user already knows the bb/100 anchors after round 1 — repeating
+  them is noise.
+
+### Added — plateau detection rule
+
+- **SKILL.md Step 6 "Plateau / climb signal"** computes the
+  recommendation from the iteration history:
+  - **Iteration 1:** recommend iterate (most users have room here).
+  - **Iterations 2..N, still climbing:** iterate one more round.
+  - **Last 2 deltas < +2 bb/100:** plateau → recommend CLIMB to next
+    Level (specify which).
+  - **3 consecutive iterations with delta < +2:** climb is overdue,
+    stop iterating.
+- **Band-climb refinement** — when a single iteration crosses into a
+  higher Level band, suggest one more iteration to confirm before
+  climbing.
+
+### Added — "You are here" Level ladder panel
+
+- **Always-visible ladder panel** in SKILL.md Step 6, shown on every
+  Arena score surface after iteration 1+. Marks each level done
+  (`✓`), next stop (`◐`), or locked (`○`); also shows current
+  iteration / recommended max and the recent-delta plateau threshold.
+  Makes "next step" concrete (a specific Level climb) instead of
+  vague "submit / iterate / stop".
+- Clarifies that the HL loop is **iteration within a level**, not a
+  level of its own. Plateau → climb to the next FEATURE level.
+
+### Added — plateau callouts in `references/optimization-levels.md`
+
+- Each of Level 1 / 2 / 3 / 4 now has a "How to recognize plateau at
+  this level" callout that mirrors the SKILL.md rule. Level 1's
+  callout is "one successful run = done — climb immediately"; the
+  rest use the +2 bb/100 delta rule.
+
+### Changed — Step 6 recommendation logic uses iteration history
+
+- The agent now reads `.arena-poker-state['iterations']` before
+  composing the Step 6 recommendation, so "We've plateaued" is no
+  longer a vibe — it's a deterministic rule on the last 2 deltas.
+- The old "Level tracking" section in SKILL.md (which proposed a
+  4-option menu after every Arena run) was reduced to a pointer at
+  the new ladder panel. One concrete recommendation, never a menu.
+
+### Verified
+
+- 19/19 pytest tests pass (`./pokerkit test`) — new state-migration
+  test added.
+- `./pokerkit version` reports `0.12.0`.
+- Manual: a `.arena-poker-state` with two iterations triggers the
+  trajectory-style report; `grep -r "submit / iterate" SKILL.md`
+  returns 0 hits.
+
 ## [0.11.0] — 2026-05-25 — "Clarity Pass — UX feedback from real dogfood run"
 
 A real dogfood run with a first-time user exposed several UX problems

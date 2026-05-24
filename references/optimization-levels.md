@@ -35,6 +35,11 @@ pot-odds + simple equity heuristic. No strategy customization.
 **Use case.** Sanity-check the loop works end-to-end. Confirm the
 DeepCFR panel is the opponent you're facing.
 
+**When you're done at this level.** As soon as one Arena run
+completes with a score in the -15..-5 band, Level 1 has done its job
+(it confirmed the pipeline works). Climb to Level 2 immediately —
+there is no "plateau" to find here.
+
 ## Level 2 — Strategy-Guided
 
 **What you add.** A `STRATEGY.md` file describing your playing style
@@ -51,6 +56,13 @@ indexed by position. Reference: `assets/decide_ranged.py`.
 **Why it works.** The default heuristic doesn't know your style.
 Once it does, it stops folding profitable hands and stops calling
 weak ones out of position.
+
+**How to recognize plateau at Level 2.** Score has settled into the
+-5..0 band and the last two iterations gained < +2 bb/100 each. That
+means your STRATEGY rules are baked in correctly — there is no more
+juice from re-tuning ranges alone. Climb to Level 3 (Auto Research)
+to add board-texture sizing + opponent HUD; that's where the next
+~3-5 bb/100 lives.
 
 ## Level 3 — Auto Research
 
@@ -75,6 +87,12 @@ ignored — board texture, opponent profile.
 **Note.** Auto Research happens **offline at edit time**, not at
 runtime. The agent compiles solver/HUD/chart data into Python
 constants. Zero LLM calls at runtime.
+
+**How to recognize plateau at Level 3.** Score is hovering around 0
+and the last two iterations gained < +2 bb/100. The static research
+data is fully exploited. Climb to Level 4 (Heuristic Learning loop)
+where you patch specific exploitable patterns from real Arena
+failure reports.
 
 ## Level 4 — Heuristic Learning loop (Jiayi Weng paradigm)
 
@@ -111,6 +129,14 @@ panel, not just generic heuristics. The DeepCFR panel has exploitable
 patterns; finding and exploiting them is what this loop does.
 
 **Reference.** `references/heuristic-learning.md` for the philosophy.
+
+**How to recognize plateau at Level 4.** Last two HL iterations both
+gained < +2 bb/100, OR three iterations in a row with delta < +2.
+That's the canonical "plateaued" signal the skill uses. You've
+patched the obvious exploits; the remaining lift requires either
+runtime LLM reasoning (Level 5) or trained weights (Level 6). Stop
+iterating and decide whether to climb to Level 5/6 or lock in your
+current score.
 
 ## Level 5 — LLM-in-the-loop (optional — expensive)
 

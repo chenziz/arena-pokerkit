@@ -2,6 +2,152 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.10.0] — 2026-05-25 — "Consistency Pass"
+
+Independent code review (Claude + Codex, two agents reading the repo
+cold) surfaced 8 critical + 8 important issues in the v0.9.0 ship.
+This release closes all of them. No new features — pure correctness,
+naming, and contract alignment.
+
+### Fixed — silent bugs
+
+- **`examples/selfplay.py` street label off-by-one.** The previous
+  mapping `("Preflop","Flop","Turn","River")[min(max(n,0),3)]` returned
+  `"River"` for any 3-, 4-, or 5-card board. Local self-play silently
+  fed a wrong street to `decide()`, corrupting any board-texture-aware
+  logic (`assets/decide_textured.py`, anything reading `table["street"]`
+  postflop). Now: 0 → Preflop, 3 → Flop, 4 → Turn, 5 → River.
+- **`examples/selfplay.py` dead opponent-picker assignment.** Removed
+  a redundant first assignment of `fn` (lines 318-319) that used a
+  different indexing formula than the canonical block; harmless when
+  `hero_idx == 0` but a future-edit trap. Kept only the correct
+  formula.
+- **`examples/llm_agent.py` `_call_llm` default model.** Was
+  `claude-sonnet-4-7` (model name typo — real Sonnet release line is
+  `claude-sonnet-4-5`/`claude-sonnet-4-6`). Aligned both the
+  `_call_llm` fallback and the `--model` CLI default; `--model` now
+  defaults to `None` so each provider picks its own sensible default
+  (`claude-sonnet-4-5` for Anthropic, `gpt-5` for OpenAI).
+- **`examples/llm_agent.py` amount-coercion crash protection.**
+  `int(action.get("amount") or 0)` on line 350 used to crash the action
+  loop if an LLM returned non-numeric `amount` (e.g. `"min"`, `"all-in"`,
+  `null`). Wrapped in `try/except (TypeError, ValueError)` with a
+  `0`-fallback so the range-clamp downstream does the right thing.
+
+### Fixed — contract violations
+
+- **Wrong STRATEGY template path in `SKILL.md`.** Step 2 told agents
+  to `cp assets/STRATEGY.md.template ./STRATEGY.md`, but the template
+  ships at `examples/STRATEGY.md.template`. A fresh agent would stall
+  or invent. Fixed to point to the real location.
+- **Registration credential surfacing was missing.** `SKILL.md` said
+  the agent surfaces the full `apiKey` + claim URL once after
+  registration, but neither `examples/agent.py` nor
+  `examples/arena_client.py` actually prints the apiKey — they only
+  log `registered agent=... base=...`. `SKILL.md` now explicitly
+  instructs the agent to `cat .arena-credentials` and surface the
+  full JSON contents (apiKey, agentId, handle, claim URL) once.
+- **L5 cost contradictions across docs.** `SKILL.md`/`CHANGELOG.md`
+  said `~$60/run`; `references/optimization-levels.md` and
+  `references/heuristic-learning.md` said `$300/run`;
+  `docs/strategy.md` also said `$300` and `5000-hand`. Canonicalized
+  to **~$60/run for a 500-hand match** everywhere (matching the
+  arithmetic: ~$0.02/action × ~3000 active actions ≈ $60). Removed
+  the stale `5000-hand` framing.
+
+### Fixed — taxonomy collision
+
+The new 6-level ladder (Levels 1–6) collided with the older "L1
+Heuristic / L2 LLM-in-the-loop / L3 Trained weights" implementation
+tier naming. A user hearing "Level 2" couldn't tell whether the agent
+meant Strategy-Guided (ladder) or Runtime-LLM (legacy). Resolved with:
+
+- **User-facing prose now always uses the ladder Level number.**
+  `SKILL.md` adds a "Rules for you" entry: surface ladder Levels, not
+  implementation tiers.
+- **`examples/llm_agent.py` rebranded** in its module docstring and
+  every cross-doc reference: it is the "**Level 5 runtime-LLM path**",
+  not "L2". `examples/agent.py` is "**L1 heuristic, used for Levels
+  1–4**".
+- **`docs/strategy.md`** gains a tier-vs-ladder mapping callout at
+  the top. L1 still = Heuristic (covers ladder Levels 1-4), L2 still
+  = Runtime-LLM (= ladder Level 5), L3 still = Trained weights
+  (= ladder Level 6).
+- **`references/heuristic-learning.md`** "Three roles for an LLM"
+  table now labels rows by ladder Level instead of L1/L2/HL.
+
+### Fixed — flow gaps
+
+- **First-contact target level is now honored downstream.** Old flow:
+  user said "Level 1", agent kept marching through every Step anyway.
+  New `SKILL.md` "Routing" table maps each target level (1 / 2 / 3 / 4
+  / 5 / 6 / "go" / "max" / "leaderboard") to a specific subset of
+  Steps and stopping condition. A Level-1 target stops after the
+  first submit; a Level-5 target requires explicit `~$60/run` cost
+  confirmation before proceeding.
+- **`references/optimization-levels.md` Step 6 decision tree fixed.**
+  Old tree wrote `(a) Iterate at current level (Level 4 — HL loop)
+  (b) Climb to next level (Level 3 — Auto Research)` after a Level-2
+  validation, which is backwards. New tree offers `(a) Climb to
+  Level 3`, `(b) Climb to Level 4`, `(c) Iterate at current`,
+  `(d) Submit`, `(e) Stop` in cost-ascending order. `SKILL.md` Step 6
+  matches.
+- **Baseline `~+15 bb/100` claim now carries Arena-vs-local
+  context.** Step 1 of `SKILL.md` previously said "Expect `~+15
+  bb/100`" without specifying that this is vs simple local bots. Now
+  Step 1 explicitly reminds the agent to surface the caveat alongside
+  the number: same heuristic typically scores `-15 to -5 bb/100` on
+  Arena.
+
+### Fixed — cross-agent compatibility / "Anthropic-first" framing
+
+- `examples/llm_agent.py` module docstring rewritten from "delegates
+  to Anthropic Claude" → "model-agnostic; picks Anthropic first, then
+  OpenAI / OpenAI-compatible (OpenRouter / Together / Groq / vLLM)".
+- `README.md` file-map line for `examples/llm_agent.py`: `L2 LLM-driven
+  agent (Claude SDK)` → `Level 5 runtime-LLM agent (model-agnostic:
+  Anthropic / OpenAI / compat)`.
+- `README.md` "What's next" table: `LLM agent starter (Anthropic SDK)`
+  → `Runtime-LLM agent starter (model-agnostic: Anthropic / OpenAI /
+  compat)`.
+- `examples/prompt.md` line 86: `L2 Anthropic-backed` → `Level 5
+  runtime-LLM path, model-agnostic ...`.
+- `docs/strategy.md` L2 code example: replaced the hardcoded
+  `anthropic.messages.create(...)` snippet with a provider-detection
+  block showing both Anthropic and OpenAI paths.
+- `AGENTS.md` file-map for `examples/llm_agent.py` now says "Level 5
+  runtime-LLM decide() (model-agnostic)".
+
+### Fixed — URL canonicalization
+
+- `SKILL.md` Step 0 was `git clone devfun-org/arena-pokerkit` —
+  that path doesn't exist yet. Fixed to `git clone
+  chenziz/arena-pokerkit` (the current canonical), with a note that
+  the future home is `devfun-org/devfun-arena-skills/skills/arena-pokerkit/`.
+
+### Fixed — fixture count drift
+
+- `examples/testing.py` has 20 `Scenario` fixtures. `AGENTS.md`,
+  `SKILL.md`, and `references/heuristic-learning.md` previously said
+  "18 fixtures". All harmonized to "20 unit fixtures". The 18 number
+  was the pytest count, which is correctly preserved where the
+  context is `uv run pytest tests/`.
+
+### Verified
+
+- 18/18 pytest tests still pass.
+- `./pokerkit version` reports `0.10.0`.
+- Two independent reviewers (Claude code-reviewer subagent + Codex
+  CLI) re-scanned the repo and found no critical issues remaining.
+
+### Migration
+
+No user-facing API breakage. The `--model` argparse default in
+`examples/llm_agent.py` is now `None` (was `claude-sonnet-4-5`);
+explicit `--model <name>` still works the same way, and if you relied
+on the implicit default, Anthropic now uses `claude-sonnet-4-5`,
+OpenAI uses `gpt-5`.
+
 ## [0.9.0] — 2026-05-25 — "Level Ladder Release"
 
 ### Added

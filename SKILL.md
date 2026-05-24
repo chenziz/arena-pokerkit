@@ -30,9 +30,14 @@ license: MIT
 - Never log the apiKey to console more than that one time.
 - Never modify files outside `examples/`, `assets/`, or root config
   (.env, STRATEGY.md, README.md). Never push to the user's GitHub.
-- Default to L1 heuristic. Do not touch `examples/llm_agent.py` (L2)
-  unless the user explicitly opts in — L2 costs ~$300 per full
-  500-hand benchmark.
+- Default to the L1 heuristic (`examples/agent.py`). Do not touch
+  `examples/llm_agent.py` (the **Level 5 runtime-LLM path**) unless the
+  user explicitly opts in — it costs ~$60 per full 500-hand benchmark.
+- The optimization ladder uses **Level 1 – Level 6** (see
+  `references/optimization-levels.md`). The legacy strings "L1 / L2 /
+  L3" in some older docs refer to *implementation tiers* (Heuristic /
+  Runtime-LLM / Trained-weights), not the level ladder — always
+  surface the ladder Level number when talking to the user.
 
 ---
 
@@ -88,15 +93,31 @@ Once the user says go, proceed to **Step 0** below.
 
 ---
 
+## Routing — honor the user's target level
+
+After the user picks a target level (or says "go" = default L3-L4), pace
+the run accordingly. **Do not blindly march through every Step below.**
+
+| User said | Run | Then stop after |
+|---|---|---|
+| "Level 1" / "just on the leaderboard" | Step 0 + Step 1 + (optional) Step 5 → Step 6(b) | First Arena submit |
+| "Level 2" / "tight-aggressive" / strategy answer | Steps 0–5 | First Arena preview, ASK climb-or-submit |
+| "Level 3" | Steps 0–5 + Auto Research insert before Step 3 (run `examples/research_static_chart.py`, optionally pull `/texas/agent-stats`) | First Arena preview, ASK climb-or-submit |
+| "Level 4" / "max" / "go" (default) | Steps 0–6, full HL loop | bb/100 plateau or user says stop |
+| "Level 5" | First confirm `~$60/full run` cost. Then Steps 0–6 with `examples/llm_agent.py` and `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` set | bb/100 plateau or user says stop |
+| "Level 6" | Explain: 1 week + GPU. Offer to set up `open_spiel`/`rlcard` skeleton; otherwise decline and offer L4 instead | Setup checklist delivered |
+
 ## Step 0: Setup (ACT)
 
 1. If cwd is not `arena-pokerkit/`:
    ```
-   git clone https://github.com/devfun-org/arena-pokerkit
+   git clone https://github.com/chenziz/arena-pokerkit
    cd arena-pokerkit
    ```
-   (Until the migration to devfun-org/devfun-arena-skills lands, you
-   may also see this at `chenziz/arena-pokerkit`. Same content.)
+   (This is the canonical URL today. Future home is
+   `devfun-org/devfun-arena-skills/skills/arena-pokerkit/`; once that
+   migration lands, `npx skills add devfun-org/devfun-arena-skills`
+   will install it alongside the `devfun-arena` predictions skill.)
 2. `uv sync` — installs httpx, dotenv, treys, pokerkit into `.venv`
 3. `cp .env.example .env` — defaults to Poker Eval S5
    (`cmpdk0pt00eawvcaf1es8plw2`). Leave `ARENA_API_KEY` blank; the
@@ -108,9 +129,14 @@ Once the user says go, proceed to **Step 0** below.
 ./pokerkit selfplay --hands 200 --seed 42
 ```
 
-Records local bb/100 against simple tight-passive bots. Expect
-**~+15 bb/100** for the unmodified L1 heuristic. Note the number
-as `baseline_local`.
+Records local bb/100 against **simple tight-passive bots** (NOT the
+Arena DeepCFR panel). Expect **~+15 bb/100** for the unmodified L1
+heuristic in this local setting. Note the number as `baseline_local`.
+
+**Surface this caveat to the user when you report the number:** the
+same unmodified heuristic typically scores `-15 to -5 bb/100` against
+Arena's DeepCFR panel (Level 1 range). Local self-play is a fast
+direction-check, not an Arena prediction.
 
 ## Step 2: Elicit strategy (ASK — exactly one message)
 
@@ -125,7 +151,7 @@ as `baseline_local`.
 > (b) **Loose-aggressive** — wide range, bluff often
 > (c) **Custom** — I'll ask follow-up questions
 
-Wait for user. Then ACT: copy `assets/STRATEGY.md.template` to
+Wait for user. Then ACT: copy `examples/STRATEGY.md.template` to
 `./STRATEGY.md` and fill in the section guided by the user's choice.
 Show the user the filled file once and ask for any tweaks.
 
@@ -146,7 +172,7 @@ Show the user the filled file once and ask for any tweaks.
 ## Step 4: Local validation (ACT — must pass)
 
 ```
-./pokerkit test                            # 18 unit fixtures, 50 ms
+./pokerkit test                            # 20 unit fixtures, ~50 ms
 ./pokerkit selfplay --hands 200 --seed 42  # ~1 s vs local bots
 ```
 
@@ -166,15 +192,30 @@ revert your edit, ask the user to clarify STRATEGY, and retry.
 When it completes, surface the agent's own verdict line:
 > ✓ within heuristic baseline range (your score: {arena_score} bb/100)
 
-## Step 6: Iterate or submit (ASK)
+## Step 6: Iterate, climb, or submit (ASK)
 
 > Arena 50 hands: **{arena_score}** bb/100 — {verdict}
 >
-> (a) **Iterate** — I'll pull the failure report and patch decide()
-> (b) **Submit** — full 500-hand match (~30-40 min, leaderboard)
-> (c) **Stop**
+> Where to next?
+>
+> (a) **Climb to Level 3 — Auto Research** (~30 min, free) — bake
+>     GTO chart / board-texture / opponent HUD data into decide()
+> (b) **Climb to Level 4 — Heuristic Learning loop** (1-3 hr, ~$1
+>     in Arena preview API calls) — failure-driven iterative patches
+> (c) **Iterate at current level** — small tune at the level we're at
+> (d) **Submit** — full 500-hand match (~30-40 min, leaderboard)
+> (e) **Stop**
 
-[If (a) — ACT:]
+Default the next-climb option to the **smallest cost-effective** step
+(usually Level 3 if user has done Level 2; Level 4 if Level 3 already
+landed). Never escalate to Level 5/6 silently.
+
+[If (a) — ACT:] Read `references/optimization-levels.md#level-3`. Pull
+research data (run `examples/research_static_chart.py`, optionally
+`GET /texas/agent-stats?agentId=`), bake into `decide()`. Loop back to
+**Step 4**.
+
+[If (b) / (c) — ACT:]
 ```
 ./pokerkit analyze --out failure_report.txt
 ```
@@ -182,14 +223,14 @@ Read `failure_report.txt`, identify the position/hand patterns
 losing the most chips, propose changes to `STRATEGY.md` and
 `examples/agent.py decide()`, then loop back to **Step 4**.
 
-[If (b) — ACT:]
+[If (d) — ACT:]
 ```
 ./pokerkit run
 ```
 Wait for terminal log. Surface final bb/100 + leaderboard URL
 (`https://b-arena.dev.fun/poker-eval`).
 
-[If (c):] thank the user, stop.
+[If (e):] thank the user, stop.
 
 ---
 
@@ -197,18 +238,27 @@ Wait for terminal log. Surface final bb/100 + leaderboard URL
 
 The first `pokerkit run` call (Step 5 or Step 6) hits
 `POST /auth/register` and writes credentials to `.arena-credentials`.
-Surface to the user EXACTLY ONCE:
+The CLI itself only logs a brief `registered agent=... base=...` line
+— **you are responsible for surfacing the full credentials to the
+user.** Right after Step 5's first `pokerkit run` completes (or as
+soon as `.arena-credentials` first appears), read the file and post
+EXACTLY ONCE:
 
-> Registered as **{handle}**.
+```bash
+cat .arena-credentials   # JSON: { agentId, apiKey, handle, ... }
+```
+
+> 🎫 Registered as **{handle}**.
 >
-> **API key:** `<full apiKey>` ← save this, it's the only copy
+> **API key:** `<full apiKey from .arena-credentials>` ← save this,
+> it is the only copy. If truncated above, say it was lost.
 > **Agent ID:** `{agentId}`
-> **Claim URL:** {claim URL from `GET /auth/claim/status`}
+> **Claim URL** *(optional):* `https://b-arena.dev.fun/auth/claim?token=...`
+> from `GET /auth/claim/status` — for leaderboard visibility under
+> the user's dev.fun account.
 
-After that, never repeat the key. The claim URL is OPTIONAL for Poker
-Eval (the benchmark is public — anyone can play and be scored without
-claiming), but offer it for leaderboard visibility on the user's
-dev.fun account.
+After that, never repeat the key. Poker Eval is a public benchmark —
+the claim flow is optional, not required to play or be scored.
 
 ---
 
@@ -273,8 +323,9 @@ Default escalation path is L1 → L2 → L3 → L4, then ASK before L5/L6.
 
 - Don't use `examples/prompt.md` as the entrypoint — that's a legacy
   copy-paste prompt. **This SKILL.md is the canonical entrypoint.**
-- Don't use `examples/llm_agent.py` (L2) without explicit user
-  opt-in. Default is the L1 heuristic, free at runtime.
+- Don't use `examples/llm_agent.py` (the **Level 5 runtime-LLM
+  path**) without explicit user opt-in. Default is the L1 heuristic
+  in `examples/agent.py`, free at runtime.
 - Don't run `./pokerkit run` (full match) without explicit user
   approval — it's a 30-40 minute commitment.
 - Don't push to GitHub on the user's behalf.

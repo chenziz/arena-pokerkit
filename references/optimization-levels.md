@@ -12,10 +12,10 @@ the time cost to reach it, and what code changes it adds.
 Level  Name                       vs DeepCFR    Time         Money     Builds on
 ─────  ─────────────────────────  ────────────  ───────────  ────────  ─────────
   1    Baseline                     -15 to -5    0 min        $0        (start)
-  2    Strategy-Guided              -5 to 0      ~20 min      $0        L1
-  3    Auto Research                -2 to +2     ~30 min      $0        L2
-  4    Heuristic Learning loop      +2 to +8     1-3 hr       ~$1       L3
-  5    LLM-in-the-loop (optional)   +5 to +12    1-2 hr       $300/run  L4
+  2    Strategy-Guided              -5 to 0      ~20 min      $0        Level 1
+  3    Auto Research                -2 to +2     ~30 min      $0        Level 2
+  4    Heuristic Learning loop      +2 to +8     1-3 hr       ~$1       Level 3
+  5    LLM-in-the-loop (optional)   +5 to +12    1-2 hr       ~$60/run  Level 4
   6    Trained weights (expert)     +8 to +15    1 week + GPU $50-200   any
 ```
 
@@ -121,15 +121,15 @@ as system prompt + the table as user prompt.
 
 **Time.** 1-2 hours to tune the prompt + integrate research context.
 
-**Cost.** ~$0.02 per action × ~3000 actions per full match = **$60
-per 500-hand benchmark**. For Sonnet-tier models. Cheaper with mini
-variants but expect ~10-20% bb/100 hit.
+**Cost.** ~$0.02 per action × ~3000 actions per full match = **~$60
+per 500-hand benchmark** for Sonnet-tier / GPT-4-class models. Cheaper
+with mini variants (Haiku, GPT-4-mini) — expect ~10-20% bb/100 hit.
 
 **Lift.** Another 3-7 bb/100 over Level 4. Top-tier prompting + good
 research context can push toward solver-equivalent play.
 
 **Trade-off.** Runtime cost is permanent — every benchmark you submit
-costs $60+ in API calls. Levels 1-4 are free at runtime.
+costs ~$60 in API calls. Levels 1-4 are free at runtime.
 
 **Use case.** You've maxed Level 4 and want to push higher without
 training your own model. Or you want to study LLM strategic
@@ -167,16 +167,18 @@ Step 3  Code             → bake STRATEGY into decide()
 Step 4  Local validate   → confirm Level 2 lift
 Step 5  Arena preview    → measure real Level 2 bb/100
 Step 6  Decide direction:
-        (a) Iterate at current level (Level 4 — HL loop)
-        (b) Climb to next level     (Level 3 — Auto Research)
-        (c) Submit current bot      (lock in your score)
-        (d) Stop
+        (a) Climb to Level 3 — Auto Research          (~30 min, free)
+        (b) Climb to Level 4 — Heuristic Learning loop (1-3 hr, ~$1)
+        (c) Iterate at current level                  (small tune)
+        (d) Submit current bot                        (lock in score)
+        (e) Stop
 ```
 
 The agent surfaces your CURRENT level after each Arena run, and
-proposes the next-most-cost-effective level to climb. You always
-choose; the agent never auto-escalates to Level 5 (cost) or Level 6
-(time) without explicit user opt-in.
+proposes the smallest cost-effective next climb (usually Level 3 if
+you're at Level 2; Level 4 if Level 3 already landed). You always
+choose; the agent never auto-escalates to Level 5 (~$60/run) or
+Level 6 (1 week + GPU) without explicit user opt-in.
 
 ## Picking your ambition
 

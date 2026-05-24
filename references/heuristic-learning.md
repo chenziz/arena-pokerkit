@@ -11,20 +11,22 @@
 Cursor, ...) to write and refine the Python `decide()` function
 offline. The deployed bot is pure code. **Zero LLM calls at runtime.**
 
-This is different from L2 (LLM-in-the-loop), where an LLM is called
-at every action. HL is faster, cheaper, deterministic, and the
-ceiling is as high as you program it.
+This is different from the **Level 5 runtime-LLM path** (in
+`examples/llm_agent.py`), where an LLM is called at every action. HL
+is faster, cheaper, deterministic, and the ceiling is as high as you
+program it. HL itself is **Level 4** in the optimization ladder
+(see `references/optimization-levels.md`).
 
 ## Three roles for an LLM (don't conflate)
 
 | Role | Where | When called | Cost / hand |
 |---|---|---|---|
-| **L1 default** | `examples/agent.py decide()` | runtime | $0 |
-| **L2 LLM-in-loop** | `examples/llm_agent.py decide()` | runtime, every action | ~$0.02 |
-| **HL coder** | Your coding agent edits `examples/agent.py` | dev time only | dev-tool cost |
+| **L1 default (Levels 1-4)** | `examples/agent.py decide()` | runtime | $0 |
+| **Level 5 runtime-LLM** | `examples/llm_agent.py decide()` | runtime, every action | ~$0.02 |
+| **HL coder (drives Level 4)** | Your coding agent edits `examples/agent.py` | dev time only | dev-tool cost |
 
-HL is the recommended path. L2 is offered as a starter for users who
-want max strategic depth at runtime cost (~$300 / 500-hand match).
+HL is the recommended path. Level 5 is offered as a starter for users
+who want max strategic depth at runtime cost (~$60 / 500-hand match).
 
 ## The HL loop
 
@@ -32,7 +34,7 @@ want max strategic depth at runtime cost (~$300 / 500-hand match).
 1. STRATEGY     Fill in STRATEGY.md (taste-driven, you write this)
 2. CODE         Coding agent reads STRATEGY.md + decide-function.md,
                 edits examples/agent.py decide() to bake rules
-3. TEST         ./pokerkit test              (18 fixtures, 50 ms)
+3. TEST         ./pokerkit test              (20 fixtures, ~50 ms)
 4. SELFPLAY     ./pokerkit selfplay --hands 200 --seed 42  (~1 s)
                 → compare bb/100 vs previous run
 5. ARENA        ./pokerkit run --max-hands 50              (~3-5 min)
@@ -46,8 +48,8 @@ want max strategic depth at runtime cost (~$300 / 500-hand match).
 
 - **Speed.** Pure Python: microseconds per decision. LLM: 2-10 seconds.
   Poker Eval has a 20-second deadline; LLM can run out.
-- **Cost.** $0 vs ~$0.02 per decision. A 500-hand match is ~$300 in
-  L2 LLM costs; HL is free at runtime.
+- **Cost.** $0 vs ~$0.02 per decision. A 500-hand match is ~$60 in
+  Level 5 runtime-LLM costs; HL is free at runtime.
 - **Determinism.** Same input → same output. Tests are reliable.
   LLM sampling is stochastic, hard to regression-test.
 - **Inspectability.** You can read the code and understand exactly
@@ -77,11 +79,11 @@ require a runtime LLM.
 The HL ceiling is around `+5 to +10 bb/100` vs the DeepCFR panel —
 strong but not solver-level. To go higher, you need one of:
 
-1. **L2 with research context.** Pass GTOWizard / TexasSolver outputs
-   into the LLM at runtime. Costs ~$300/match.
-2. **L3 trained weights.** DeepCFR / NFSP / CFR+ trained on labeled
-   spots. Runs at $0/match but takes ~1 week to train + needs a
-   GPU. See `docs/strategy.md` "L3 — Trained weights".
+1. **Level 5 with research context.** Pass GTOWizard / TexasSolver
+   outputs into the LLM at runtime. Costs ~$60/match.
+2. **Level 6 trained weights.** DeepCFR / NFSP / CFR+ trained on
+   labeled spots. Runs at $0/match but takes ~1 week to train + needs
+   a GPU. See `docs/strategy.md` "L3 — Trained weights".
 3. **Solver lookup table.** Pre-solve canonical spots offline, ship
    the lookup. Bake the table into Python via HL — same paradigm,
    richer data.

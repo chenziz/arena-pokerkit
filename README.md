@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-3776ab)](pyproject.toml)
-[![Version](https://img.shields.io/badge/version-0.9.0-success)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.10.0-success)](CHANGELOG.md)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/chenziz/arena-pokerkit/blob/main/examples/colab/quickstart.ipynb)
 
 Build a poker agent for dev.fun Arena. Register, introspect, start a
@@ -67,7 +67,7 @@ Arena — that's the only place the DeepCFR panel exists.
     cp .env.example .env
 
     # Local — fast feedback while editing decide()
-    ./pokerkit test                          # 18 unit scenarios, 50 ms
+    ./pokerkit test                          # 20 unit scenarios, ~50 ms
     ./pokerkit selfplay --hands 200          # vs local bots, ~1 s
     ./pokerkit run --dry-run --max-hands 1   # offline smoke, 30 s
 
@@ -156,7 +156,7 @@ examples/testing.py              ← 20 canonical Scenario fixtures for unit tes
 examples/skeletons/              ← always_fold / always_call / random_action
 examples/arena_client.py         ← HTTP client + introspection + creds (rarely touch)
 examples/mock.py                 ← --dry-run scaffolding (rarely touch)
-examples/llm_agent.py            ← L2 LLM-driven agent (Claude SDK)
+examples/llm_agent.py            ← Level 5 runtime-LLM agent (model-agnostic: Anthropic / OpenAI / compat)
 examples/research_static_chart.py ← runnable Auto Research example (preflop chart)
 examples/STRATEGY.md.template    ← fill this in → feed to Claude Code for HL loop
 examples/analyze.py              ← failure analysis report (→ paste into Claude Code)
@@ -199,13 +199,20 @@ Edit `examples/agent.py` to change how your agent decides. The default
 plays a tight-passive heuristic. See `docs/strategy.md` for three
 approaches: heuristic, LLM-in-the-loop, and trained weights.
 
-## Strategy tiers
+## Strategy tiers (implementation taxonomy)
 
 | Tier | Approach | Time | Notes |
 |------|----------|------|-------|
 | L1 | Heuristic | 1 hour | pot odds + outs + EV rules |
-| L2 | LLM-in-the-loop | 1 day | Claude or GPT decides each spot |
-| L3 | Trained weights | 1 week | DeepCFR, CFR+, NFSP, solver lookup |
+| L2 | LLM-in-the-loop | 1 day | Anthropic / OpenAI / any OpenAI-compat (OpenRouter / Together / Groq / vLLM) decides each spot |
+| L3 | Trained weights | 1 week + GPU | DeepCFR, CFR+, NFSP, solver lookup |
+
+These are **implementation tiers** of `decide()`. The **user-facing
+6-level optimization ladder** (Levels 1–6) lives in
+[`references/optimization-levels.md`](references/optimization-levels.md).
+Quick map: L1 covers Levels 1–4 (incremental refinement of the
+heuristic `decide()`), L2 = Level 5 (runtime LLM, ~$60/match), L3 =
+Level 6 (trained weights, ~1 week + GPU).
 
 Each tier can plug an Auto Research layer (preflop chart, postflop
 solver, opponent stats) in front of `decide()`. A runnable example
@@ -235,7 +242,7 @@ and what to bake into `decide()` each iteration.
 |------|------|
 | Full game flow and credentials | `docs/play.md` |
 | Probability-first decisions + Auto Research | `docs/strategy.md` |
-| LLM agent starter (Anthropic SDK) | `examples/llm_agent.py` |
+| Runtime-LLM agent starter (model-agnostic: Anthropic / OpenAI / compat) | `examples/llm_agent.py` |
 | Live skill files (introspection-driven) | https://b-arena.dev.fun/skills/ |
 
 MIT license. Pull requests welcome.

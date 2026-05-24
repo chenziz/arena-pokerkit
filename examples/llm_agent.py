@@ -1,12 +1,15 @@
-"""Arena PokerKit — L2 LLM agent.
+"""Arena PokerKit — runtime-LLM agent (Level 5 in the optimization ladder).
 
 Same end-to-end loop as agent.py (pending-actions → decide → action,
 periodic benchmark/status terminal check), but decide() delegates to
-Anthropic Claude. Falls back to the L1 heuristic on any parse failure,
-timeout, or missing API key.
+a chat-completions LLM. Model-agnostic: picks Anthropic Claude (if
+ANTHROPIC_API_KEY is set), then OpenAI / OpenAI-compatible endpoints
+(OpenRouter, Together, Groq, vLLM, ...) via OPENAI_API_KEY. Falls back
+to the L1 heuristic on any parse failure, timeout, or missing API key.
 
-Cost estimate: ~$0.02 per decision with Claude Sonnet 4.x at default
-sizing. Run a small benchmark before pointing this at long matches.
+Cost estimate: ~$0.02 per decision with mid-tier models (Sonnet 4.x,
+GPT-4-class). A 500-hand match averages ~3000 actions → roughly $60
+per full benchmark. Run a small `--max-hands 50` preview first.
 
 CLI:
     uv run examples/llm_agent.py
@@ -126,7 +129,7 @@ def _call_llm(system: str, user: str, max_tokens: int,
             import anthropic  # type: ignore
             client = anthropic.Anthropic()
             resp = client.messages.create(
-                model=model_hint or "claude-sonnet-4-7",
+                model=model_hint or "claude-sonnet-4-5",
                 max_tokens=max_tokens, system=system,
                 messages=[{"role": "user", "content": user}])
             return "".join(getattr(b, "text", "") for b in resp.content
@@ -347,7 +350,13 @@ def _validate_against_allowed(action: dict, table: dict) -> dict:
     if name in ("fold", "check", "call"):
         action.pop("amount", None)
         return action
-    amount = int(action.get("amount") or 0)
+    # LLM may emit non-numeric amount on bad output (e.g. "min", "all-in",
+    # null). Coerce to int; fall back to 0 and let the range clamp below
+    # do the right thing instead of crashing the action loop.
+    try:
+        amount = int(action.get("amount") or 0)
+    except (TypeError, ValueError):
+        amount = 0
     if name == "bet":
         rng = allowed.get("betRange") or {}
     elif name == "raise":
@@ -375,7 +384,9 @@ def main(argv: Optional[list[str]] = None) -> int:
                              "exercises llm_decide() instead of falling back "
                              "to the heuristic.")
     parser.add_argument("--max-hands", type=int, default=0)
-    parser.add_argument("--model", default="claude-sonnet-4-5")
+    parser.add_argument("--model", default=None,
+                        help="Override the per-provider default. When unset, "
+                             "Anthropic uses claude-sonnet-4-5, OpenAI uses gpt-5.")
     parser.add_argument("--handle", default="pokerkit-llm")
     parser.add_argument("--name", default="PokerKit LLM")
     parser.add_argument("--quote", default="thinking out loud")

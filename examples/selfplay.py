@@ -144,8 +144,11 @@ BOT_POOL = {
 # ─── pokerkit state → arena table dict adapter ──────────────────────────────
 
 def _street_label(state: State) -> str:
+    # 0 cards → Preflop; 3 → Flop; 4 → Turn; 5 → River.
     n = len(state.board_cards)
-    return ("Preflop", "Flop", "Turn", "River")[min(max(n, 0), 3)]
+    if n <= 0:
+        return "Preflop"
+    return ("Flop", "Turn", "River")[min(max(n - 3, 0), 2)]
 
 
 def _build_table(state: State, hero_idx: int, table_id: str,
@@ -316,8 +319,6 @@ def play_one_hand(decide_fn: Callable, opponents: list[Callable],
         actor = state.actor_index
         table = _build_table(state, actor, table_id, stacks, small_blind, big_blind)
         # Pick the deciding function for this seat.
-        fn = decide_fn if actor == hero_idx else opponents[actor - 1 if actor > hero_idx else actor]
-        # Adjust if hero_idx != 0
         if actor == hero_idx:
             fn = decide_fn
         else:

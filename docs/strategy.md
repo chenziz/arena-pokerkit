@@ -1,9 +1,24 @@
-# Strategy guide — three tiers + Auto Research
+# Strategy guide — three implementation tiers + Auto Research
+
+> **Note on naming.** This page uses "L1 / L2 / L3" as **implementation
+> tier** labels (Heuristic / Runtime-LLM / Trained-weights). The
+> user-facing **optimization ladder** (Level 1–6) lives in
+> `references/optimization-levels.md`. Quick map:
+>
+> | This page | Optimization ladder |
+> |---|---|
+> | L1 Heuristic | Levels 1-4 (all built on `examples/agent.py`) |
+> | L2 Runtime-LLM | Level 5 (`examples/llm_agent.py`) |
+> | L3 Trained weights | Level 6 |
+>
+> When talking to a user, always surface the ladder Level number, not
+> the implementation-tier letter.
 
 This kit ships with one working agent (`examples/agent.py`, the L1
-heuristic). The road from there is L2 (LLM-in-the-loop) and L3 (trained
-weights). Each tier can plug an **Auto Research** layer in front of
-`decide()` for extra signal.
+heuristic). The road from there is the Runtime-LLM tier
+(L2 / Level 5) and the Trained-weights tier (L3 / Level 6). Each tier
+can plug an **Auto Research** layer in front of `decide()` for extra
+signal.
 
 ---
 
@@ -12,8 +27,8 @@ weights). Each tier can plug an **Auto Research** layer in front of
 | Tier | Approach              | Time to working bot | Cost per match | Ceiling           | Auto Research multiplier              |
 |------|-----------------------|---------------------|----------------|-------------------|----------------------------------------|
 | L1   | Heuristic             | 1 hour              | $0             | Weak/medium       | Negligible — heuristic ignores context |
-| L2   | LLM-in-the-loop       | 1 day               | $1 – $50       | Medium/strong     | **High** — solver hints + opp stats reshape the LLM's decision |
-| L3   | Trained weights       | 1 week              | $0 inference   | Strong+           | Decisive — training data labeled by Auto Research is where leaderboards are won |
+| L2   | LLM-in-the-loop       | 1 day               | ~$60 / match   | Medium/strong     | **High** — solver hints + opp stats reshape the LLM's decision |
+| L3   | Trained weights       | 1 week + GPU        | $0 inference   | Strong+           | Decisive — training data labeled by Auto Research is where leaderboards are won |
 
 You will probably ship L1 first, then layer L2 on top, then go to L3
 only if you want to be on the leaderboard for real.
@@ -58,10 +73,14 @@ and the DeepCFR reference panel.
 
 ---
 
-## L2 — LLM-in-the-loop
+## L2 — LLM-in-the-loop (Level 5 in the user-facing ladder)
 
 Same loop as L1, but `decide()` posts the table state to an LLM. See
-`examples/llm_agent.py` for the Anthropic Claude version.
+`examples/llm_agent.py` for the shipped implementation — it is
+**model-agnostic**: picks Anthropic (`ANTHROPIC_API_KEY`) first, then
+falls back to any OpenAI / OpenAI-compatible endpoint
+(`OPENAI_API_KEY`, optionally `OPENAI_BASE_URL` for OpenRouter /
+Together / Groq / vLLM).
 
 ```python
 def decide(table, deadline_s=10.0, research_context=None):
@@ -71,23 +90,43 @@ def decide(table, deadline_s=10.0, research_context=None):
     prompt = json.dumps(state)
     if research_context:
         prompt += "\n\nAUTO-RESEARCH CONTEXT:\n" + json.dumps(research_context)
-    resp = llm_client.messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=800,
-        system=POKER_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    action = parse_action_json(resp.content[0].text)
+
+    # Provider-agnostic call. examples/llm_agent.py wraps this in
+    # _call_llm(system, user, max_tokens, model_hint) which picks
+    # Anthropic or OpenAI based on which env var is set.
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        import anthropic
+        resp = anthropic.Anthropic().messages.create(
+            model="claude-sonnet-4-5", max_tokens=800,
+            system=POKER_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = resp.content[0].text
+    else:  # OPENAI_API_KEY (also covers OpenRouter / Together / Groq / vLLM)
+        from openai import OpenAI
+        resp = OpenAI().chat.completions.create(
+            model="gpt-5", max_completion_tokens=800,
+            messages=[
+                {"role": "system", "content": POKER_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        text = resp.choices[0].message.content
+
+    action = parse_action_json(text)
     return validate_against_allowed(action, table)
 ```
 
 `research_context` is the dict returned by `retrieve_solver_context(table)`
-(see Auto Research below) — leave it `None` to get the bare L2 behavior.
+(see Auto Research below) — leave it `None` to get the bare runtime-LLM
+behavior.
 
-**Cost expectation**: Claude Sonnet 4.x is ~$0.02 per decision at the
-default sizing. A 5000-hand benchmark averages ~3 decisions per hand
-for the active agent, so ballpark **$300 per benchmark**. Use Haiku
-(~$0.002 / decision) for development, Sonnet for the real run.
+**Cost expectation**: Sonnet 4.x / GPT-4-class is ~$0.02 per decision
+at the default sizing. A **500-hand benchmark** averages ~3 decisions
+per active-agent hand × ~3000 active actions total, so ballpark **~$60
+per full match**. Use mini variants (Haiku, GPT-4-mini, ~$0.002 /
+decision) for development; promote to a stronger model for the real
+run.
 
 ---
 
@@ -298,7 +337,7 @@ This is sharply different from L2 (LLM called *per hand at runtime*):
                baking ranges and rules into Python — zero runtime LLM.
 
 4. TEST        pokerkit test
-               → 20 canonical scenarios, all must pass.
+               → 20 canonical scenario fixtures, all must pass.
 
 5. EVALUATE    pokerkit run --max-hands 50   (~3-5 min on Arena)
                → bb/100 delta vs previous run.
@@ -342,7 +381,7 @@ and it will patch the exact weaknesses each iteration.
 | Tier | Reference file                                |
 |------|-----------------------------------------------|
 | L1   | `examples/agent.py` (decide + retrieve_solver_context) |
-| L2   | `examples/llm_agent.py` (decide -> Anthropic, research_context aware) |
+| L2   | `examples/llm_agent.py` — model-agnostic decide (Anthropic / OpenAI / OpenAI-compat), research_context aware |
 | L3   | not shipped — see options A/B/C/D above       |
 
 Each file's `decide()` follows the same signature:

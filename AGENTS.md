@@ -35,8 +35,8 @@ examples/                     ← scripts (CLI black boxes for the agent)
   replay.py                   ← HTML replay viewer
   arena_client.py             ← HTTP client (rarely touch)
   mock.py                     ← --dry-run scaffolding
-  llm_agent.py                ← L2 LLM-backed decide() (model-agnostic)
-  testing.py                  ← 18 scenario fixtures
+  llm_agent.py                ← Level 5 runtime-LLM decide() (model-agnostic: Anthropic/OpenAI/compat)
+  testing.py                  ← 20 scenario fixtures
   research_static_chart.py    ← Auto Research example
   skeletons/                  ← always_fold / always_call / random_action
   STRATEGY.md.template        ← strategy template (copy to root as STRATEGY.md)
@@ -66,8 +66,8 @@ pokerkit                      ← shell wrapper at repo root
 1. **Never push to GitHub** unless the user explicitly asks. This is
    the user's repo, not yours.
 2. **`tests/` must always pass** (`uv run pytest tests/ -q`). 18 tests
-   today. If you add functionality, add tests. If they fail, fix them
-   before considering the work done.
+   covering 20 scenario fixtures today. If you add functionality, add
+   tests. If they fail, fix them before considering the work done.
 3. **Don't add dependencies** beyond what's in `pyproject.toml`
    without asking. `httpx`, `python-dotenv`, `treys`, `pokerkit` are
    the four core deps; `anthropic` and `openai` are optional `[llm]`
@@ -79,7 +79,8 @@ pokerkit                      ← shell wrapper at repo root
 5. **`amount` semantics**: total chips committed on this street after
    acting (NOT increment). The API will 400 if you send a delta.
 6. **Default to L1 heuristic.** Don't call an LLM at runtime unless the
-   user explicitly enables L2 (cost ~$0.02/decision, ~$300/match).
+   user explicitly enables the Level 5 runtime-LLM path
+   (`examples/llm_agent.py`, cost ~$0.02/decision, ~$60/match).
 7. **Introspect at startup.** Call `GET /__introspection` after auth
    and verify endpoints. Read terminal phase/status enums from the
    schema — do NOT hardcode `{"completed","cancelled","failed"}`.

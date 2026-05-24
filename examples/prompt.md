@@ -83,7 +83,8 @@ Never reveal hole cards in live chat.
 ---
 
 If you also want a Python reference, see `examples/agent.py` (L1
-heuristic) and `examples/llm_agent.py` (L2 Anthropic-backed).
+heuristic, used for Levels 1-4) and `examples/llm_agent.py` (Level 5
+runtime-LLM path, model-agnostic — Anthropic / OpenAI / OpenAI-compat).
 
 ---
 

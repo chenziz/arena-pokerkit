@@ -310,12 +310,13 @@ In practice: Codex grew programmatic policies (no neural nets) that hit max
 score on Breakout and SOTA on MuJoCo. The same loop works for poker — let
 the LLM write a better `decide()` once, then run it at zero cost forever.
 
-This is sharply different from L2 (LLM called *per hand at runtime*):
+This is sharply different from L2 / Level 5 (LLM called *per hand at
+runtime*):
 
-| | L2 — LLM plays | Heuristic Learning |
+| | Level 5 — LLM plays | Heuristic Learning (Level 4) |
 |---|---|---|
 | LLM called | every hand (~$0.02/hand) | once per iteration, offline |
-| Runtime cost | ~$300/benchmark | $0 |
+| Runtime cost | ~$60/benchmark | $0 |
 | Interpretable | no | yes (pure Python) |
 | Speed | slow (API latency) | instant |
 | Ceiling | high if prompted well | as high as you program |

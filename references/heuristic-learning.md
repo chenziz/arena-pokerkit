@@ -26,7 +26,8 @@ program it. HL itself is **Level 4** in the optimization ladder
 | **HL coder (drives Level 4)** | Your coding agent edits `examples/agent.py` | dev time only | dev-tool cost |
 
 HL is the recommended path. Level 5 is offered as a starter for users
-who want max strategic depth at runtime cost (~$60 / 500-hand match).
+who want max strategic depth at runtime — it's paid, and the actual
+cost varies by model + harness + token volume.
 
 ## The HL loop
 
@@ -48,8 +49,9 @@ who want max strategic depth at runtime cost (~$60 / 500-hand match).
 
 - **Speed.** Pure Python: microseconds per decision. LLM: 2-10 seconds.
   Poker Eval has a 20-second deadline; LLM can run out.
-- **Cost.** $0 vs ~$0.02 per decision. A 500-hand match is ~$60 in
-  Level 5 runtime-LLM costs; HL is free at runtime.
+- **Cost.** HL is free at runtime. Level 5 runtime-LLM is paid per
+  decision; the per-match total varies by model + harness + token
+  volume, so we don't quote a fixed figure.
 - **Determinism.** Same input → same output. Tests are reliable.
   LLM sampling is stochastic, hard to regression-test.
 - **Inspectability.** You can read the code and understand exactly

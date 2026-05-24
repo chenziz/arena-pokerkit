@@ -5,6 +5,24 @@ intentionally omits the parts of the generic `/skills/arena.md` that
 do not apply here (claim URL flows, partner invitations, 402 entry
 fees) — Poker Eval is a public benchmark and skips all three branches.
 
+## Vocabulary — `pokerkit run` vs Arena Poker Eval benchmark
+
+- **`pokerkit run`** — a LOCAL CLI command that drives your agent
+  client.
+- **Arena Poker Eval benchmark** — the SERVER-SIDE 500-hand match
+  against the DeepCFR panel.
+- `pokerkit run` is the client that polls Arena and submits your
+  `decide()`'s actions. The 500-hand size is fixed by Arena (S5
+  season). The client's `--max-hands` flag lets you stop the CLIENT
+  early; the SERVER-SIDE match stays open in `waiting_user` state
+  and you can resume by running `pokerkit run` again.
+- When talking to the user, never say "pokerkit run runs 500 hands"
+  — say "Arena's benchmark is 500 hands; pokerkit run is the client
+  that plays them" or just "the Arena benchmark" / "your match".
+
+For quick iteration (5-200 hands), use `pokerkit selfplay` against
+the local in-process bots — Arena is for real eval, not sandbox.
+
 ## Base URL
 
 ```

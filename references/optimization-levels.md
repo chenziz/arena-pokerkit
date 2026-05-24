@@ -15,8 +15,12 @@ Level  Name                       vs DeepCFR    Time         Money     Builds on
   2    Strategy-Guided              -5 to 0      ~20 min      $0        Level 1
   3    Auto Research                -2 to +2     ~30 min      $0        Level 2
   4    Heuristic Learning loop      +2 to +8     1-3 hr       ~$1       Level 3
-  5    LLM-in-the-loop (optional)   +5 to +12    1-2 hr       ~$60/run  Level 4
-  6    Trained weights (expert)     +8 to +15    1 week + GPU $50-200   any
+  5    LLM-in-the-loop (optional)   +5 to +12    1-2 hr       paid*     Level 4
+  6    Trained weights (expert)     +8 to +15    1 week + GPU paid*     any
+
+* Level 5/6 are paid; the exact cost depends on your model choice,
+  token volume, harness behavior, and retries. Budget cautiously and
+  measure your own run rather than relying on a quoted figure.
 ```
 
 ## Level 1 — Baseline (out of the box)
@@ -121,15 +125,18 @@ as system prompt + the table as user prompt.
 
 **Time.** 1-2 hours to tune the prompt + integrate research context.
 
-**Cost.** ~$0.02 per action × ~3000 actions per full match = **~$60
-per 500-hand benchmark** for Sonnet-tier / GPT-4-class models. Cheaper
-with mini variants (Haiku, GPT-4-mini) — expect ~10-20% bb/100 hit.
+**Cost.** Paid — varies by model + token usage + harness behavior +
+retries. We don't quote a specific figure because everyone runs a
+different model with a different prompt; budget cautiously and
+measure your own first run. Cheaper with mini variants (Haiku,
+GPT-4-mini) — expect ~10-20% bb/100 hit. Free dev variants help you
+tune before promoting to a stronger model for the real run.
 
 **Lift.** Another 3-7 bb/100 over Level 4. Top-tier prompting + good
 research context can push toward solver-equivalent play.
 
 **Trade-off.** Runtime cost is permanent — every benchmark you submit
-costs ~$60 in API calls. Levels 1-4 are free at runtime.
+incurs LLM API calls. Levels 1-4 are free at runtime.
 
 **Use case.** You've maxed Level 4 and want to push higher without
 training your own model. Or you want to study LLM strategic
@@ -177,8 +184,8 @@ Step 6  Decide direction:
 The agent surfaces your CURRENT level after each Arena run, and
 proposes the smallest cost-effective next climb (usually Level 3 if
 you're at Level 2; Level 4 if Level 3 already landed). You always
-choose; the agent never auto-escalates to Level 5 (~$60/run) or
-Level 6 (1 week + GPU) without explicit user opt-in.
+choose; the agent never auto-escalates to Level 5 (paid — cost varies
+by model) or Level 6 (1 week + GPU) without explicit user opt-in.
 
 ## Picking your ambition
 

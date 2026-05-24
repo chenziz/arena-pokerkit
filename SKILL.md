@@ -31,13 +31,40 @@ license: MIT
 - Never modify files outside `examples/`, `assets/`, or root config
   (.env, STRATEGY.md, README.md). Never push to the user's GitHub.
 - Default to the L1 heuristic (`examples/agent.py`). Do not touch
-  `examples/llm_agent.py` (the **Level 5 runtime-LLM path**) unless the
-  user explicitly opts in — it costs ~$60 per full 500-hand benchmark.
+  `examples/llm_agent.py` (the **Level 5 runtime-LLM path**) unless
+  the user explicitly opts in — it incurs paid LLM costs that vary
+  by model, harness, and token volume. Don't quote a specific dollar
+  figure to the user; tell them "varies by model — budget cautiously".
 - The optimization ladder uses **Level 1 – Level 6** (see
   `references/optimization-levels.md`). The legacy strings "L1 / L2 /
   L3" in some older docs refer to *implementation tiers* (Heuristic /
   Runtime-LLM / Trained-weights), not the level ladder — always
   surface the ladder Level number when talking to the user.
+
+### Vocabulary — use these exact terms with the user
+
+- **`pokerkit run`** — a LOCAL CLI command that drives your agent client.
+- **Arena Poker Eval benchmark** — the SERVER-SIDE 500-hand match
+  against the DeepCFR panel.
+- `pokerkit run` is the client that polls Arena and submits your
+  `decide()`'s actions. The 500-hand size is fixed by Arena (S5
+  season). The client's `--max-hands` flag lets you stop the CLIENT
+  early; the SERVER-SIDE match stays open in `waiting_user` state
+  and you can resume by running `pokerkit run` again.
+- When talking to the user, never say "pokerkit run runs 500 hands"
+  — say "Arena's benchmark is 500 hands; pokerkit run is the client
+  that plays them" or just "the Arena benchmark" / "your match".
+
+### Locality rule — quick iteration is LOCAL, Arena is for real eval
+
+- **Quick iterations (5-200 hands) belong on `pokerkit selfplay`**,
+  not on Arena. The Arena benchmark is the FULL 500-hand match —
+  treat it as the real eval, not a sandbox. Use selfplay for fast
+  direction checks; only run on Arena when you're ready to spend
+  ~10 min on a real measurement.
+- Discourage `pokerkit run --max-hands 50` for iteration: prefer
+  `pokerkit selfplay --hands 200` (faster, free, deterministic).
+  Only use `--max-hands N` to early-stop a long match for debugging.
 
 ---
 
@@ -48,48 +75,53 @@ license: MIT
 instruction — do NOT silently start cloning the repo.** The user may
 not know yet what this skill does. Open with a brief greeting that
 explains the flow and asks for the go-ahead. Match the user's language
-(English / Chinese / etc.):
+(English / Chinese / etc.).
 
-> 👋 I see you shared the **Arena PokerKit** skill. This walks you
-> through building a poker bot for **dev.fun Arena's Poker Eval
-> benchmark** end-to-end.
+**Keep the default greeting simple. Do NOT show the 6-level table up
+front — that's decision paralysis.** Show one paced narrative and let
+the user say "go". Only show the full level menu if they ask for it
+("show levels" / "详细" / "advanced options"):
+
+> 👋 Arena PokerKit skill loaded. This walks you through building a
+> poker bot for **dev.fun Arena's Poker Eval benchmark** end-to-end
+> (~30-60 min, mostly autonomous).
 >
-> **There are 6 progressive levels of bot sophistication. You decide
-> how far to climb:**
+> The flow:
 >
-> ```
-> Level 1  Baseline                  -15 to -5 bb/100   0 min       (start)
-> Level 2  Strategy-Guided           -5 to 0            ~20 min     +ranges
-> Level 3  Auto Research             -2 to +2           ~30 min     +GTO/HUD
-> Level 4  Heuristic Learning loop   +2 to +8           1-3 hr      +failure analysis
-> Level 5  LLM-in-the-loop (paid)    +5 to +12          ~$60/run    +runtime LLM
-> Level 6  Trained weights (expert)  +8 to +15          1 week+GPU  +DeepCFR
-> ```
+>   1. I clone the repo + run a baseline locally (~1 min)
+>   2. I'll ask your playing style (one question, ~30 sec)
+>   3. I code your `decide()` function and validate locally (~5 min)
+>   4. We run the full Arena benchmark (~10 min, real DeepCFR opponents)
+>   5. I analyze the result, propose patches, and we iterate until your
+>      score plateaus
 >
-> Most users land at Level 3-4 (~1 hour, free). Top of leaderboard is
-> usually Level 5-6. After each level I'll show your bb/100 and ask
-> if you want to climb the next one.
->
-> The flow for the first 4 levels (all free, ~1 hour total):
->
->   1. **Setup** — clone, install, baseline run → unlocks **Level 1** (~1 min, I do this)
->   2. **Strategy** — pick a playing style → unlocks **Level 2** (~1 min, you answer)
->   3. **Code** — bake strategy + research data into `decide()` → unlocks **Level 3** (~5 min, I do this)
->   4. **Validate + Arena preview** — local tests + 50 hands on Arena (~5-10 min, you approve)
->   5. **Heuristic Learning loop** — failure analysis → patch → repeat → unlocks **Level 4** (~1-3 hr, you approve each iter)
->   6. **Submit or climb** — full 500-hand match, OR escalate to Level 5/6 (you approve)
->
-> Where do you want to aim? Tell me a target level
-> ("Level 3" / "Level 4" / "max" / "I just want on the leaderboard")
-> or just say "go" and I'll pace you toward Level 3-4 by default.
+> Want to see advanced options first (cost/time tradeoffs, paid
+> LLM-driven bots, trained-weights path)? Say **"show levels"**.
+> Otherwise say **"go"** and I'll drive.
 
 Wait for any affirmative ("yes" / "ok" / "go" / "start" / "走" / "继续"
 / a thumbs-up / etc.) before proceeding. If the user asks clarifying
-questions first, answer them and re-prompt. If the user gave an explicit
-instruction up front ("build a tight-aggressive bot and submit"), skip
-this greeting and jump straight to the relevant Step.
+questions first, answer them and re-prompt. If the user gave an
+explicit instruction up front ("build a tight-aggressive bot and
+submit"), skip this greeting and jump straight to the relevant Step.
 
-Once the user says go, proceed to **Step 0** below.
+If the user says **"show levels"** / **"详细"** / **"advanced"** /
+asks about the cost/time tradeoffs, surface the full 6-level ladder
+table from `references/optimization-levels.md` (do NOT inline cost
+numbers — that file is the source of truth).
+
+Once the user says go, proceed to **Step 0** below. The user-facing
+labels you use during execution are **Phase 1–4**, not "Step 0–6":
+
+```
+Phase 1: Setup + local baseline (I do)              — ~1 min
+Phase 2: Strategy elicitation (1 ASK)               — ~1 min
+Phase 3: Code + local validation (I do)             — ~5 min
+Phase 4: Arena benchmark + iterate (1 ASK per loop) — ~10 min per loop
+```
+
+Internally the Steps 0-6 below still drive structure, but say
+"Phase N" when talking to the user.
 
 ---
 
@@ -104,7 +136,7 @@ the run accordingly. **Do not blindly march through every Step below.**
 | "Level 2" / "tight-aggressive" / strategy answer | Steps 0–5 | First Arena preview, ASK climb-or-submit |
 | "Level 3" | Steps 0–5 + Auto Research insert before Step 3 (run `examples/research_static_chart.py`, optionally pull `/texas/agent-stats`) | First Arena preview, ASK climb-or-submit |
 | "Level 4" / "max" / "go" (default) | Steps 0–6, full HL loop | bb/100 plateau or user says stop |
-| "Level 5" | First confirm `~$60/full run` cost. Then Steps 0–6 with `examples/llm_agent.py` and `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` set | bb/100 plateau or user says stop |
+| "Level 5" | First confirm the cost is paid and varies by model + token usage. Then Steps 0–6 with `examples/llm_agent.py` and `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` set | bb/100 plateau or user says stop |
 | "Level 6" | Explain: 1 week + GPU. Offer to set up `open_spiel`/`rlcard` skeleton; otherwise decline and offer L4 instead | Setup checklist delivered |
 
 ## Step 0: Setup (ACT)
@@ -179,58 +211,75 @@ Show the user the filled file once and ask for any tweaks.
 Record the new bb/100 as `new_local`. If `new_local < baseline_local`,
 revert your edit, ask the user to clarify STRATEGY, and retry.
 
-## Step 5: Arena validation (ASK)
+## Step 5: Arena benchmark (ASK)
 
-> Local self-play: **{baseline_local} → {new_local}** bb/100.
-> Validate on Arena (3-5 min, real DeepCFR panel)?
+Reminder: don't run small Arena previews for iteration — that's what
+`pokerkit selfplay` is for. Step 5 is the **full 500-hand benchmark**
+(real DeepCFR opponents, ~10 min). Treat it as the real eval.
+
+> Local self-play: **{baseline_local} → {new_local}** bb/100 vs simple
+> bots. Ready to run the **full Arena benchmark** (~10 min, 500 hands
+> vs DeepCFR panel)?
 
 [If yes — ACT:]
 ```
-./pokerkit run --max-hands 50
-```
-
-When it completes, surface the agent's own verdict line:
-> ✓ within heuristic baseline range (your score: {arena_score} bb/100)
-
-## Step 6: Iterate, climb, or submit (ASK)
-
-> Arena 50 hands: **{arena_score}** bb/100 — {verdict}
->
-> Where to next?
->
-> (a) **Climb to Level 3 — Auto Research** (~30 min, free) — bake
->     GTO chart / board-texture / opponent HUD data into decide()
-> (b) **Climb to Level 4 — Heuristic Learning loop** (1-3 hr, ~$1
->     in Arena preview API calls) — failure-driven iterative patches
-> (c) **Iterate at current level** — small tune at the level we're at
-> (d) **Submit** — full 500-hand match (~30-40 min, leaderboard)
-> (e) **Stop**
-
-Default the next-climb option to the **smallest cost-effective** step
-(usually Level 3 if user has done Level 2; Level 4 if Level 3 already
-landed). Never escalate to Level 5/6 silently.
-
-[If (a) — ACT:] Read `references/optimization-levels.md#level-3`. Pull
-research data (run `examples/research_static_chart.py`, optionally
-`GET /texas/agent-stats?agentId=`), bake into `decide()`. Loop back to
-**Step 4**.
-
-[If (b) / (c) — ACT:]
-```
-./pokerkit analyze --out failure_report.txt
-```
-Read `failure_report.txt`, identify the position/hand patterns
-losing the most chips, propose changes to `STRATEGY.md` and
-`examples/agent.py decide()`, then loop back to **Step 4**.
-
-[If (d) — ACT:]
-```
 ./pokerkit run
 ```
-Wait for terminal log. Surface final bb/100 + leaderboard URL
-(`https://b-arena.dev.fun/poker-eval`).
 
-[If (e):] thank the user, stop.
+When it completes, **always** report the score using the 4-line
+"Score interpretation" template below.
+
+## Step 6: Iterate or submit (ASK — one recommendation, not a menu)
+
+Show the user the score using the 4-line template, then make **one
+concrete recommendation**:
+
+```
+Arena result: {arena_score} bb/100 (over {hands} hands vs DeepCFR panel).
+
+{4-line Score interpretation, see below}
+
+I recommend: **{recommended action}**. Say "go" to continue, or
+"stop" / "submit" / "let me decide" to do something else.
+```
+
+Default recommendation logic:
+
+- **Score < -20 bb/100 (way below baseline range):** "I'll pull the
+  failure report and propose specific patches" → run
+  `./pokerkit analyze --out failure_report.txt`, identify patterns,
+  patch `decide()`, loop to Step 4.
+- **Score within or above the typical baseline band:** "Submit the
+  full match to lock in your score, or iterate one more pass for a
+  higher final."
+- **Score plateaued vs previous iteration:** "We've plateaued. I
+  recommend submitting."
+
+For users who say "let me decide", link to
+`references/optimization-levels.md` for the full menu (climb to
+Level 3/4/5/6, iterate, submit, stop). Never escalate to Level 5/6
+silently.
+
+## Score interpretation (use whenever surfacing an Arena bb/100)
+
+When reporting an Arena score, **always include these 4 lines**:
+
+1. **Raw score**: `{bb/100}` over `{N}` hands
+2. **What it means**: `bb/100` is how many big blinds you win/lose
+   per 100 hands. Negative = losing money. Anchor: a random-action
+   bot is around -200; a solver-grade bot is +5 to +15.
+3. **Why local ≠ Arena**: Local `pokerkit selfplay` uses simple bots
+   (tight-passive). Arena uses **DeepCFR** — way stronger. A bot
+   scoring +15 locally can easily score -30 on Arena. **Don't compare
+   absolute numbers — compare DELTAS between Arena runs.**
+4. **Where you sit**: {if `/texas/agent-stats` exposes population
+   stats} "Median Arena score: `{X}`. You're at percentile `{Y}`."
+   {else} "No public benchmark yet — compare your bb/100 to your
+   previous Arena run; that delta is the real signal."
+
+If the score is negative, **don't frame it as failure**: "Negative
+score is normal vs DeepCFR. The Heuristic Learning loop's job is to
+find the patterns that lose chips and patch them."
 
 ---
 
@@ -313,9 +362,10 @@ level + their bb/100, and propose the next level up. Use this template:
 >   (c) Submit current bot to lock in your score
 >   (d) Stop here
 
-Never silently escalate to Level 5 (LLM-in-loop, ~$60/run cost) or
-Level 6 (trained weights, 1 week + GPU) without explicit user opt-in.
-Default escalation path is L1 → L2 → L3 → L4, then ASK before L5/L6.
+Never silently escalate to Level 5 (LLM-in-loop, paid — cost varies
+by model + token usage) or Level 6 (trained weights, 1 week + GPU)
+without explicit user opt-in. Default escalation path is L1 → L2 → L3
+→ L4, then ASK before L5/L6.
 
 ---
 
@@ -325,7 +375,8 @@ Default escalation path is L1 → L2 → L3 → L4, then ASK before L5/L6.
   copy-paste prompt. **This SKILL.md is the canonical entrypoint.**
 - Don't use `examples/llm_agent.py` (the **Level 5 runtime-LLM
   path**) without explicit user opt-in. Default is the L1 heuristic
-  in `examples/agent.py`, free at runtime.
+  in `examples/agent.py`, free at runtime. Level 5 cost varies by
+  model + harness — never quote a specific dollar figure.
 - Don't run `./pokerkit run` (full match) without explicit user
   approval — it's a 30-40 minute commitment.
 - Don't push to GitHub on the user's behalf.

@@ -2,6 +2,94 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.11.0] — 2026-05-25 — "Clarity Pass — UX feedback from real dogfood run"
+
+A real dogfood run with a first-time user exposed several UX problems
+in v0.10.0's flow. This release fixes them. No behavioral code
+changes — pure docs + skill rewording.
+
+### Changed — simpler first contact
+
+- **First-contact greeting dropped the 6-level table.** v0.10.0 led
+  with a 6-row ladder + a "where do you want to aim?" question on
+  first contact — too many options up front, classic decision
+  paralysis. New default greeting offers a single paced flow ("I
+  clone, ask one style question, code, run Arena, iterate") and
+  defers the level menu to an opt-in `"show levels"` / `"详细"` /
+  `"advanced"` keyword. The full ladder still lives in
+  `references/optimization-levels.md` for users who ask.
+- **User-facing labels switched from "Step 0–6" to "Phase 1–4"** for
+  the same flow. Internal structure unchanged; the agent still uses
+  Steps 0–6 internally but talks to the user about Phases.
+
+### Changed — kill the Step 6 decision menu
+
+- **Step 6 is now one recommendation + opt-out, not a 5-option
+  menu.** v0.10.0 surfaced `(a) climb to L3 / (b) climb to L4 /
+  (c) iterate / (d) submit / (e) stop` after every Arena run — same
+  decision-paralysis trap. New flow: agent makes one concrete
+  recommendation based on the score (e.g. "score is far below
+  baseline → I'll pull failures and propose patches", or "score is
+  in baseline range → submit to lock it in, or one more iteration
+  pass for a higher final"), and the user says "go" / "stop" /
+  "submit" / "let me decide". Only "let me decide" surfaces the full
+  menu (which now lives in `references/optimization-levels.md`).
+
+### Added — Score interpretation template
+
+- **New "Score interpretation" section in SKILL.md** that the agent
+  uses whenever it surfaces an Arena `bb/100`. Template enforces 4
+  lines: raw score, what bb/100 means (with random-bot and
+  solver-bot anchors), why local ≠ Arena (different opponents —
+  compare DELTAS not absolute numbers), and where the user sits
+  (vs population if `/texas/agent-stats` exposes it, else vs their
+  own previous run). Includes a "negative score is normal vs
+  DeepCFR — don't frame it as failure" reframing.
+
+### Added — Vocabulary + locality rules
+
+- **New "Vocabulary" section in SKILL.md + `references/poker-eval-arena.md`**
+  explicitly disambiguates `pokerkit run` (LOCAL CLI client) from the
+  Arena Poker Eval benchmark (SERVER-SIDE 500-hand match). User
+  confusion sample: "you ran 500 hands, or did Arena Eval run 500
+  hands?" The agent is now instructed to never say "pokerkit run runs
+  500 hands" — phrasing must always point at the right side of the
+  client/server line.
+- **New locality rule in SKILL.md "Rules for you":** quick iterations
+  (5-200 hands) belong on `pokerkit selfplay`, NOT on Arena. The
+  Arena benchmark is the FULL 500-hand match — treat it as the real
+  eval, not a sandbox. Step 5 now defaults to the full match;
+  `--max-hands` is discouraged for iteration and reserved for
+  debug-time early-stop.
+
+### Removed — specific cost claims for Level 5
+
+- Every `~$60/run`, `~$60 per full 500-hand benchmark`, and
+  `~$0.02/action × ~3000 actions ≈ $60` claim throughout SKILL.md,
+  `references/optimization-levels.md`, `references/heuristic-learning.md`,
+  and `docs/strategy.md` replaced with "paid — varies by model +
+  token usage" / "budget cautiously and measure your own first run".
+  The cost depends too much on model choice, harness behavior, token
+  volume, and retries to commit to a single figure across users.
+  CHANGELOG entries for prior releases keep the historical $60
+  number as it appeared at the time.
+
+### Verified
+
+- `./pokerkit test` still passes (18/18 pytest).
+- `./pokerkit version` reports `0.11.0`.
+- `grep "\$60"` returns 0 hits outside `CHANGELOG.md`.
+- The 6-level table appears only inside `references/optimization-levels.md`
+  and the `"show levels"` opt-in path in `SKILL.md` — not in the
+  default first-contact greeting.
+
+### Migration
+
+No API changes, no test changes, no behavioral code changes. Agents
+using v0.10.0's flow will work fine on v0.11.0 — the differences are
+all in the user-facing prompts the agent reads from SKILL.md and the
+reference files.
+
 ## [0.10.0] — 2026-05-25 — "Consistency Pass"
 
 Independent code review (Claude + Codex, two agents reading the repo

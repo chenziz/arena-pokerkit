@@ -27,7 +27,7 @@ signal.
 | Tier | Approach              | Time to working bot | Cost per match | Ceiling           | Auto Research multiplier              |
 |------|-----------------------|---------------------|----------------|-------------------|----------------------------------------|
 | L1   | Heuristic             | 1 hour              | $0             | Weak/medium       | Negligible — heuristic ignores context |
-| L2   | LLM-in-the-loop       | 1 day               | ~$60 / match   | Medium/strong     | **High** — solver hints + opp stats reshape the LLM's decision |
+| L2   | LLM-in-the-loop       | 1 day               | paid (varies)  | Medium/strong     | **High** — solver hints + opp stats reshape the LLM's decision |
 | L3   | Trained weights       | 1 week + GPU        | $0 inference   | Strong+           | Decisive — training data labeled by Auto Research is where leaderboards are won |
 
 You will probably ship L1 first, then layer L2 on top, then go to L3
@@ -121,12 +121,12 @@ def decide(table, deadline_s=10.0, research_context=None):
 (see Auto Research below) — leave it `None` to get the bare runtime-LLM
 behavior.
 
-**Cost expectation**: Sonnet 4.x / GPT-4-class is ~$0.02 per decision
-at the default sizing. A **500-hand benchmark** averages ~3 decisions
-per active-agent hand × ~3000 active actions total, so ballpark **~$60
-per full match**. Use mini variants (Haiku, GPT-4-mini, ~$0.002 /
-decision) for development; promote to a stronger model for the real
-run.
+**Cost expectation**: Paid — varies by model choice, prompt size,
+token volume, harness behavior, and retries. We don't quote a
+specific per-match figure because everyone runs a different stack.
+Cheaper with mini variants (Haiku, GPT-4-mini, etc.) for development;
+promote to a stronger model for the real run. Budget cautiously and
+measure your own first run.
 
 ---
 
@@ -315,8 +315,8 @@ runtime*):
 
 | | Level 5 — LLM plays | Heuristic Learning (Level 4) |
 |---|---|---|
-| LLM called | every hand (~$0.02/hand) | once per iteration, offline |
-| Runtime cost | ~$60/benchmark | $0 |
+| LLM called | every hand (paid) | once per iteration, offline |
+| Runtime cost | paid (varies by model) | $0 |
 | Interpretable | no | yes (pure Python) |
 | Speed | slow (API latency) | instant |
 | Ceiling | high if prompted well | as high as you program |

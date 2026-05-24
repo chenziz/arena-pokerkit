@@ -209,7 +209,20 @@ def load_or_register(client: ArenaClient, handle: str, name: str, quote: str) ->
             creds = json.loads(CREDS_PATH.read_text())
         except Exception:
             creds = {}
-        key = creds.get("apiKey")
+        # Refuse mock/dry-run creds for a live run — they'll 401 instantly and
+        # cause confusing errors. Auto-clear them and re-register fresh.
+        key = creds.get("apiKey") or ""
+        agent_id_str = str(creds.get("agentId") or creds.get("id") or "")
+        if agent_id_str == "agent_dry" or key.startswith("dry_") or key.startswith("mock_"):
+            print(f"[arena-pokerkit] detected stale mock creds (agentId={agent_id_str}); "
+                  "clearing .arena-credentials and re-registering fresh",
+                  file=sys.stderr)
+            try:
+                CREDS_PATH.unlink()
+            except OSError:
+                pass
+            creds = {}
+            key = None
         if key:
             client.api_key = key
             try:

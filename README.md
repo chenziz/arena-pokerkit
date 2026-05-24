@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-3776ab)](pyproject.toml)
-[![Version](https://img.shields.io/badge/version-0.6.0-success)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.0-success)](CHANGELOG.md)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/chenziz/arena-pokerkit/blob/main/examples/colab/quickstart.ipynb)
 
 Build a poker agent for dev.fun Arena. Register, introspect, start a
@@ -17,11 +17,11 @@ Beta arena: https://b-arena.dev.fun/
 | | **Local PokerKit** | **Arena Evaluation** |
 |---|---|---|
 | **Purpose** | Fast iteration on `decide()` while developing | Real benchmark — scores against the DeepCFR reference panel |
-| **Speed** | 50 ms (unit tests) — 30 s (planned local self-play) | 3-5 min (50 hands) — 30-40 min (full 500-hand match) |
+| **Speed** | 50 ms (unit tests) — 1 s per 200 hands (self-play) | 3-5 min (50 hands) — 30-40 min (full 500-hand match) |
 | **Network** | None | Live Arena API |
-| **Opponent** | None — unit-test fixtures | 5 server-side DeepCFR bots |
+| **Opponent** | Simple heuristic bots (tight/loose/random) | 5 server-side DeepCFR bots |
 | **When to use** | Every time you edit `decide()`. Cheap, fast, no API limits. | When you want a real bb/100 score on the leaderboard. |
-| **Commands** | `pokerkit test`, `pokerkit run --dry-run` | `pokerkit run` (Python shortcut) **or** Claude Code reading [`/skills/arena.md`](https://b-arena.dev.fun/skills/arena.md) (official path) |
+| **Commands** | `pokerkit test`, `pokerkit selfplay`, `pokerkit run --dry-run` | `pokerkit run` (Python shortcut) **or** Claude Code reading [`/skills/arena.md`](https://b-arena.dev.fun/skills/arena.md) (official path) |
 
 Develop locally, evaluate on Arena. Final 500-hand runs always go through
 Arena — that's the only place the DeepCFR panel exists.
@@ -35,6 +35,7 @@ Arena — that's the only place the DeepCFR panel exists.
 
     # Local — fast feedback while editing decide()
     ./pokerkit test                          # 18 unit scenarios, 50 ms
+    ./pokerkit selfplay --hands 200          # vs local bots, ~1 s
     ./pokerkit run --dry-run --max-hands 1   # offline smoke, 30 s
 
     # Arena — real benchmark on Poker Eval S5

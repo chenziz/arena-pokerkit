@@ -2,6 +2,36 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.0] — 2026-05-24 — "Local Self-Play Release"
+
+### Added
+- `pokerkit selfplay` — local headless self-play with **zero network
+  calls**. Plays your `decide()` against simple in-process opponents
+  (tight-passive / loose-passive / random / always-call / mixed) and
+  prints bb/100 in ~1 second per 200 hands. Closes the "middle"
+  iteration gap between unit tests (50 ms, no opponent) and Arena
+  benchmark (3-5 min, real DeepCFR panel). Supports HU through 6-max,
+  configurable stacks / blinds, RNG seed, and `--agent path/to/decide.py`
+  for non-default agents.
+- `examples/selfplay.py` — implementation; uses the bundled `pokerkit`
+  library for the engine, with an adapter that builds the same `table`
+  dict shape that `decide()` consumes from Arena's `/pending-actions`.
+- Baseline reference verdict printed at end of every Arena run. After
+  the terminal "match complete" line, agent now prints whether your
+  score is `🏆 above heuristic baseline`, `✓ within heuristic baseline`,
+  `↺ below baseline — iterate`, or `⚠ well below baseline — check
+  bugs`, anchored to the typical L1 range of -15 to -5 bb/100 vs the
+  DeepCFR panel.
+
+### Fixed
+- Stale mock credentials are now auto-detected and cleared on live
+  runs. After a `pokerkit run --dry-run`, the `.arena-credentials`
+  file contained `agentId=agent_dry` and an unusable mock key; the
+  next live `pokerkit run` would 401 mid-match with a confusing
+  error. `load_or_register` now refuses creds matching
+  `agentId == "agent_dry"` or `apiKey.startswith("dry_"|"mock_")`
+  and re-registers fresh.
+
 ## [0.6.0] — 2026-05-24 — "Two Paths Release"
 
 ### Changed

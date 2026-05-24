@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 
 
 def _ensure_path() -> None:
@@ -44,18 +44,21 @@ def _print_help() -> None:
     print("""usage: pokerkit <command> [options]
 
 commands:
-  run         play a benchmark (alias of `uv run examples/agent.py`)
+  run         play a benchmark on Arena (alias of `uv run examples/agent.py`)
+  selfplay    LOCAL headless self-play vs simple bots — fast decide() loop
   replay      render a self-contained HTML viewer for past matches
   analyze     failure analysis report for the Heuristic Learning loop
   test        run the pytest smoke suite
   version     print version + git commit
 
 examples:
-  pokerkit run --max-hands 50              # 50-hand preview (~3-5 min on S5)
+  pokerkit selfplay                        # 200 HU hands vs tight bot, ~1s
+  pokerkit selfplay --hands 1000 --opponent random
+  pokerkit selfplay --players 6 --opponent mixed --seed 42
+  pokerkit run --max-hands 50              # 50-hand Arena preview (~3-5 min)
   pokerkit run --dry-run --max-hands 1     # offline smoke
   pokerkit run --agent examples/skeletons/random_action.py
   pokerkit replay --latest                 # writes replay.html
-  pokerkit replay --list                   # last 10 competitions
   pokerkit analyze                         # failure report → paste into Claude Code
   pokerkit analyze --out report.txt        # save to file
 """)
@@ -78,6 +81,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     if cmd == "run":
         import agent  # noqa: WPS433
         return agent.main(rest)
+
+    if cmd == "selfplay":
+        import selfplay  # noqa: WPS433
+        return selfplay.main(rest)
 
     if cmd == "replay":
         import replay  # noqa: WPS433

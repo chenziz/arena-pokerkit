@@ -607,6 +607,27 @@ def _run_benchmark_loop(
                           f"({phase}/{msstatus}) | "
                           f"hands={match.get('completedHands')} | "
                           f"adjustedBbPer100={match.get('adjustedBbPer100')}")
+                    # Baseline reference — give users context for whether their
+                    # score is good/bad against the DeepCFR reference panel.
+                    score = match.get("adjustedBbPer100")
+                    if score is not None:
+                        try:
+                            s = float(score)
+                            print(f"[arena-pokerkit{label}] baseline reference: "
+                                  "default L1 heuristic typically scores -15 to -5 "
+                                  "bb/100 vs the DeepCFR panel.")
+                            if s > 5:
+                                tag = "🏆 above heuristic baseline — strong"
+                            elif s > -5:
+                                tag = "✓ within heuristic baseline range"
+                            elif s > -15:
+                                tag = "↺ below baseline — iterate decide()"
+                            else:
+                                tag = "⚠ well below baseline — check decide() bugs"
+                            print(f"[arena-pokerkit{label}] verdict: {tag} "
+                                  f"(your score: {s:+.1f} bb/100)")
+                        except (TypeError, ValueError):
+                            pass
                     print(f"[arena-pokerkit{label}] match summary: "
                           f"{json.dumps(match, sort_keys=True)}")
                     state["bankroll"] = int(match.get("rawChipDelta") or 0)

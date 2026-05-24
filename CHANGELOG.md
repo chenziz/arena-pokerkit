@@ -2,6 +2,47 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.12.1] — 2026-05-25 — "Handle collision auto-recovery"
+
+A fresh-environment dogfood run hit `409 Handle already taken` on the
+very first `pokerkit run` because the default handle `pokerkit-starter`
+is globally unique and was already registered by an earlier user. The
+old code errored out with "Run with a fresh handle: --handle <new-handle>",
+which breaks the skill's one-shot autonomous setup promise.
+
+### Fixed — auto-suffix handle on 409 collision
+
+- **`examples/arena_client.py` `load_or_register()`** now catches
+  `409` responses from `POST /auth/register` whose body looks like a
+  handle-taken error (matches `"already taken"` or `"handle"` in the
+  body, case-insensitive). On a hit it retries with
+  `f"{handle}-{secrets.token_hex(3)}"` (e.g. `pokerkit-starter-a8f2`)
+  up to **3 attempts** total. The successful handle is what lands in
+  `.arena-credentials`, so the user sees the suffixed handle from then on.
+- One stderr line per retry:
+  `handle 'pokerkit-starter' taken; retrying as 'pokerkit-starter-a8f2'`.
+
+### Changed — SKILL.md "Registration" notes the auto-retry
+
+- New callout in the **Registration** section so the agent expects the
+  one stderr line and reads the final handle from `.arena-credentials`
+  (not from the prompt or hard-coded defaults) before surfacing it.
+
+### Verified
+
+- New tests in `tests/test_smoke.py`:
+  `test_register_409_handle_taken_auto_suffixes` (mocks one 409 → one
+  200, asserts second body has `pokerkit-starter-<6-hex>` shape and
+  creds persisted) and `test_register_409_gives_up_after_3_attempts`
+  (3 × 409 → `ArenaError`, no infinite loop).
+- `./pokerkit version` reports `0.12.1`.
+
+### Migration
+
+None. A user upgrading from v0.12.0 with valid `.arena-credentials`
+hits the cached-creds path and never re-registers, so the new code
+path is dormant for them. The fix only triggers on first registration.
+
 ## [0.12.0] — 2026-05-25 — "Plateau & Trajectory — give the user a stopping signal"
 
 A second dogfood run with a real user exposed the next UX gap: after

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import sys
 import tempfile
 import time
@@ -240,13 +241,48 @@ def load_or_register(client: ArenaClient, handle: str, name: str, quote: str) ->
                         pass
                 else:
                     raise
-    body = client.post("/auth/register", {
-        "handle": handle, "name": name, "quote": quote, "description": "",
-    })
+    # Handles are globally unique. On a fresh dogfood the default
+    # "pokerkit-starter" collides; auto-suffix and retry so the skill's
+    # "one-shot setup" promise holds. Cap at 3 retries (cap chosen so
+    # 24 bits of entropy * 3 tries makes a collision effectively
+    # impossible without masking a real config problem like a bad base URL).
+    attempt_handle = handle
+    body = None
+    for attempt in range(3):
+        try:
+            body = client.post("/auth/register", {
+                "handle": attempt_handle, "name": name, "quote": quote,
+                "description": "",
+            })
+            break
+        except ArenaError as e:
+            if e.status == 409 and _is_handle_taken(e.body) and attempt < 2:
+                suffix = secrets.token_hex(3)
+                attempt_handle = f"{handle}-{suffix}"
+                print(f"[arena-pokerkit] handle {handle!r} taken; "
+                      f"retrying as {attempt_handle!r}", file=sys.stderr)
+                continue
+            raise
     if isinstance(body, dict) and "apiKey" in body:
         client.api_key = body["apiKey"]
     _atomic_write(CREDS_PATH, json.dumps(body, indent=2))
     return body if isinstance(body, dict) else {}
+
+
+def _is_handle_taken(body: Any) -> bool:
+    """Return True if a 409 body looks like a handle-collision error.
+    Matches Arena's "Handle already taken" message and tolerates dict
+    or string shapes."""
+    if isinstance(body, dict):
+        text = " ".join(
+            str(v) for v in (
+                body.get("error"), body.get("message"), body.get("detail"),
+            ) if v
+        )
+    else:
+        text = str(body or "")
+    text = text.lower()
+    return "already taken" in text or "handle" in text
 
 
 def _default_state() -> dict:

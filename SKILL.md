@@ -352,7 +352,19 @@ The first `pokerkit run` call (Step 5 or Step 6) hits
 `POST /auth/register` and writes credentials to `.arena-credentials`.
 The CLI itself only logs a brief `registered agent=... base=...` line
 — **you are responsible for surfacing the full credentials to the
-user.** Right after Step 5's first `pokerkit run` completes (or as
+user.**
+
+> **Handle collision auto-recovery.** Arena handles are globally
+> unique, so the default `pokerkit-starter` collides on any fresh
+> environment after the first user. `load_or_register()` auto-retries
+> with a random suffix (`pokerkit-starter-a8f2`, up to 3 attempts) on
+> a 409 "Handle already taken" response. You'll see one stderr line
+> like `handle 'pokerkit-starter' taken; retrying as 'pokerkit-starter-a8f2'`
+> — that's expected, not an error. The handle that actually landed is
+> in `.arena-credentials`; read it from there before surfacing to the
+> user.
+
+Right after Step 5's first `pokerkit run` completes (or as
 soon as `.arena-credentials` first appears), read the file and post
 EXACTLY ONCE:
 

@@ -675,3 +675,72 @@ def test_terminal_cancelled_phase():
     assert action_route.call_count == 0, "no action when no pending tables"
     # Pending was polled at least once before terminal detection — bounded.
     assert pending_route.call_count >= 1
+
+
+@respx.mock
+def test_register_409_handle_taken_auto_suffixes():
+    """Fresh dogfood: the default handle `pokerkit-starter` collides on
+    /auth/register with 409 `Handle already taken`. load_or_register()
+    must auto-retry with `f"{handle}-{secrets.token_hex(3)}"` and succeed
+    on the second attempt — no manual --handle required."""
+    register_route = respx.post(f"{MOCK_BASE}/auth/register").mock(side_effect=[
+        httpx.Response(409, json={"error": "Handle already taken"}),
+        httpx.Response(200, json={
+            "agentId": "agent_retry", "apiKey": "retry_key",
+            "handle": "pokerkit-starter-deadbe", "name": "PokerKit Starter",
+        }),
+    ])
+
+    client = arena_client_mod.ArenaClient(MOCK_BASE)
+    try:
+        creds = arena_client_mod.load_or_register(
+            client, handle="pokerkit-starter",
+            name="PokerKit Starter", quote="GG",
+        )
+    finally:
+        client.close()
+
+    assert register_route.call_count == 2, (
+        f"expected exactly 2 register POSTs (1 collide + 1 retry), "
+        f"got {register_route.call_count}"
+    )
+
+    first_body = json.loads(register_route.calls[0].request.content)
+    second_body = json.loads(register_route.calls[1].request.content)
+    assert first_body["handle"] == "pokerkit-starter", first_body
+    assert second_body["handle"].startswith("pokerkit-starter-"), second_body
+    suffix = second_body["handle"].removeprefix("pokerkit-starter-")
+    # secrets.token_hex(3) → 6 hex chars
+    assert len(suffix) == 6 and all(c in "0123456789abcdef" for c in suffix), (
+        f"suffix must be 6 hex chars from secrets.token_hex(3), got {suffix!r}"
+    )
+
+    assert creds["apiKey"] == "retry_key"
+    # Credentials persisted with the handle that actually landed.
+    assert json.loads(Path(".arena-credentials").read_text())["apiKey"] == "retry_key"
+
+
+@respx.mock
+def test_register_409_gives_up_after_3_attempts():
+    """If the suffix retry keeps colliding (effectively impossible IRL,
+    but possible if Arena's 409 logic mis-reports), give up after 3 tries
+    instead of looping forever."""
+    register_route = respx.post(f"{MOCK_BASE}/auth/register").mock(
+        return_value=httpx.Response(409, json={"error": "Handle already taken"})
+    )
+
+    client = arena_client_mod.ArenaClient(MOCK_BASE)
+    try:
+        with pytest.raises(arena_client_mod.ArenaError) as exc:
+            arena_client_mod.load_or_register(
+                client, handle="pokerkit-starter",
+                name="PokerKit Starter", quote="GG",
+            )
+    finally:
+        client.close()
+
+    assert exc.value.status == 409
+    assert register_route.call_count == 3, (
+        f"expected exactly 3 attempts before giving up, "
+        f"got {register_route.call_count}"
+    )

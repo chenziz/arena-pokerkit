@@ -1,8 +1,12 @@
 """Failure analysis report for the Heuristic Learning loop.
 
-Fetches your agent's recent submissions from Arena, identifies losing
+Fetches your agent's recent settled hands from Arena, identifies losing
 patterns by position and hand, and prints a formatted report you can
 paste directly into Claude Code / Codex to guide decide() improvements.
+
+Data sources (joined on tableId):
+  - GET /texas/recent-tables?competitionId=&agentId=  → seats, hole cards, winners
+  - GET /agent/{agentId}/replays                      → chipDelta per hand
 
 Usage:
     pokerkit analyze                      # most recent competition
@@ -47,84 +51,117 @@ def _load_creds() -> tuple[Optional[str], Optional[str]]:
     return os.environ.get("ARENA_API_KEY"), os.environ.get("ARENA_AGENT_ID")
 
 
-def _fetch_submissions(client: ArenaClient, agent_id: Optional[str],
-                       competition_id: Optional[str], limit: int) -> list[dict]:
-    """Fetch per-hand submission data from /agent/submissions."""
-    parts = [f"limit={limit}"]
-    if agent_id:
-        parts.append(f"agentId={agent_id}")
+def _fetch_recent_tables(client: ArenaClient, agent_id: str,
+                         competition_id: Optional[str], limit: int) -> list[dict]:
+    """GET /texas/recent-tables — per-table seats, hole cards, board, winners."""
+    parts = [f"limit={limit}", f"agentId={agent_id}"]
     if competition_id:
         parts.append(f"competitionId={competition_id}")
     qs = "?" + "&".join(parts)
     try:
-        body = client.get(f"/agent/submissions{qs}")
+        body = client.get(f"/texas/recent-tables{qs}")
     except ArenaError as e:
-        print(f"[analyze] submissions fetch failed: {e}", file=sys.stderr)
+        print(f"[analyze] recent-tables fetch failed: {e}", file=sys.stderr)
         return []
     if isinstance(body, dict) and isinstance(body.get("data"), list):
         return body["data"]
-    if isinstance(body, list):
-        return body
     return []
 
 
-def _resolve_latest_competition(submissions: list[dict]) -> Optional[str]:
-    """Return the most-recent competitionId seen in submissions."""
-    for sub in submissions:
-        chal = sub.get("challenge") or {}
-        cid = chal.get("competitionId") or chal.get("id")
+def _fetch_replays(client: ArenaClient, agent_id: str, limit: int) -> dict[str, int]:
+    """GET /agent/{id}/replays → {tableId: chipDelta}. Returns {} on failure.
+    Server caps limit at 50."""
+    capped = min(limit, 50)
+    try:
+        body = client.get(f"/agent/{agent_id}/replays?limit={capped}")
+    except ArenaError as e:
+        print(f"[analyze] replays fetch failed (will use payoutChips instead): {e}",
+              file=sys.stderr)
+        return {}
+    rows = body if isinstance(body, list) else (
+        body.get("data") if isinstance(body, dict) else [])
+    out: dict[str, int] = {}
+    for r in rows or []:
+        tid = r.get("tableId") or r.get("handId")
+        if tid is not None:
+            out[tid] = int(r.get("chipDelta") or 0)
+    return out
+
+
+def _resolve_latest_competition(tables: list[dict]) -> Optional[str]:
+    for t in tables:
+        cid = t.get("competitionId")
         if cid:
             return cid
     return None
 
 
-def analyze(submissions: list[dict], top_n: int = 10) -> str:
-    """Produce a plain-text failure report from a list of submission dicts."""
-    if not submissions:
+def analyze(tables: list[dict], chip_deltas: dict[str, int],
+            self_agent_id: str, top_n: int = 10) -> str:
+    """Build a plain-text failure report from recent-tables + replays."""
+    if not tables:
         return (
-            "No submissions found. Run `pokerkit run --max-hands 50` first,\n"
-            "then re-run `pokerkit analyze`.\n"
+            "No completed tables found.\n"
+            "Run `pokerkit run --max-hands 50` first, then re-run\n"
+            "`pokerkit analyze`.\n"
         )
 
-    total = len(submissions)
-    wins = losses = 0
     by_seat: dict[int, dict] = {}
-    all_hands: list[dict] = []
+    rows: list[dict] = []
 
-    for sub in submissions:
-        data = sub.get("data") or {}
-        payout = data.get("payoutChips") or 0
-        committed = data.get("totalCommittedChips") or 0
-        delta = payout - committed
-        seat = data.get("seatNumber") or 0
-        hole = list(data.get("holeCards") or [])
-        reasoning = (data.get("reasoning") or "").strip()
-        score = sub.get("score")
+    for t in tables:
+        tid = t.get("id") or t.get("tableId")
+        seats = t.get("seats") or []
+        # Find OUR seat in this table.
+        my_seat = next(
+            (s for s in seats if s.get("agentId") == self_agent_id), None)
+        if not my_seat:
+            continue
 
-        if delta >= 0:
-            wins += 1
-        else:
-            losses += 1
+        seat_num = my_seat.get("seatNumber") or 0
+        hole = list(my_seat.get("holeCards") or [])
+        payout = int(my_seat.get("payoutChips") or 0)
+        stack_end = int(my_seat.get("stackChips") or 0)
 
-        if seat:
-            rec = by_seat.setdefault(seat, {
-                "seat": seat, "total": 0, "delta_sum": 0,
-            })
+        # Prefer chipDelta from /replays (precise); else infer from payout.
+        delta = chip_deltas.get(tid)
+        if delta is None:
+            # Fall back to "did we get any payout this hand?". Coarse.
+            delta = payout - 100  # rough proxy: assume 100 BB committed avg
+
+        winner = (t.get("winners") or [{}])[0]
+        winner_handle = winner.get("agentName") or winner.get("agentId") or "?"
+        winner_hand = winner.get("handName") or ""
+        board = " ".join(t.get("boardCards") or [])
+
+        if seat_num:
+            rec = by_seat.setdefault(seat_num,
+                                     {"seat": seat_num, "total": 0, "delta_sum": 0})
             rec["total"] += 1
             rec["delta_sum"] += delta
 
-        all_hands.append({
+        rows.append({
+            "table_id": tid,
             "delta": delta,
-            "seat": seat,
+            "seat": seat_num,
             "hole": hole,
-            "reasoning": reasoning,
+            "board": board,
             "payout": payout,
-            "committed": committed,
-            "score": score,
+            "stack_end": stack_end,
+            "winner": winner_handle,
+            "winner_hand": winner_hand,
         })
 
-    # Sort worst hands (most negative delta first)
-    all_hands.sort(key=lambda x: x["delta"])
+    if not rows:
+        return ("No hands found where you were seated.\n"
+                "Check that --match competitionId matches a comp you played.\n")
+
+    rows.sort(key=lambda x: x["delta"])
+
+    total = len(rows)
+    wins = sum(1 for r in rows if r["delta"] > 0)
+    losses = sum(1 for r in rows if r["delta"] < 0)
+    pushes = total - wins - losses
 
     lines: list[str] = []
     sep = "=" * 62
@@ -134,13 +171,13 @@ def analyze(submissions: list[dict], top_n: int = 10) -> str:
         "ARENA POKERKIT — FAILURE ANALYSIS REPORT",
         "(paste this into Claude Code alongside STRATEGY.md)",
         sep,
-        f"Total submissions : {total}",
-        f"Win rate          : {wins}/{total} ({100 * wins // total if total else 0}%)",
-        f"Loss rate         : {losses}/{total}",
+        f"Total hands       : {total}",
+        f"Wins / Losses     : {wins} / {losses}"
+        + (f" (push: {pushes})" if pushes else ""),
         "",
     ]
 
-    # Position breakdown (worst first)
+    # Position breakdown
     lines.append("POSITION BREAKDOWN  (worst → best avg chip delta):")
     seat_rows = sorted(
         by_seat.values(),
@@ -157,23 +194,21 @@ def analyze(submissions: list[dict], top_n: int = 10) -> str:
     lines.append("")
 
     # Worst N hands
-    n = min(top_n, len(all_hands))
-    lines.append(f"WORST {n} DECISIONS (by chip delta):")
-    for i, h in enumerate(all_hands[:n], 1):
+    n = min(top_n, len(rows))
+    lines.append(f"WORST {n} HANDS (by chip delta):")
+    for i, h in enumerate(rows[:n], 1):
         pos = _SEAT_POS.get(h["seat"], f"s{h['seat']}")
         hole_str = " ".join(h["hole"]) if h["hole"] else "??"
         lines.append(
             f"  #{i:02d}  {hole_str:7s}  {pos:3}  "
-            f"delta={h['delta']:+d}"
-            f"  (payout={h['payout']} committed={h['committed']})"
+            f"delta={h['delta']:+d}  "
+            f"board=[{h['board']}]  won by {h['winner']}"
         )
-        if h["reasoning"]:
-            lines.append(f"       reasoning: {h['reasoning'][:80]}")
     lines.append("")
 
-    # Top N winning hands (for contrast)
-    best = sorted(all_hands, key=lambda x: x["delta"], reverse=True)[:min(3, len(all_hands))]
-    lines.append("BEST 3 DECISIONS (for contrast):")
+    # Top 3 winning hands (for contrast)
+    best = sorted(rows, key=lambda x: x["delta"], reverse=True)[:min(3, len(rows))]
+    lines.append("BEST 3 HANDS (for contrast):")
     for i, h in enumerate(best, 1):
         pos = _SEAT_POS.get(h["seat"], f"s{h['seat']}")
         hole_str = " ".join(h["hole"]) if h["hole"] else "??"
@@ -198,8 +233,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
             "Generate a failure analysis report for the Heuristic Learning loop.\n"
-            "Fetches Arena submissions, ranks positions and hands by chip delta,\n"
-            "and outputs a paste-ready report for Claude Code / Codex."
+            "Fetches recent tables + replays from Arena, ranks positions and hands\n"
+            "by chip delta, outputs a paste-ready report for Claude Code / Codex."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -212,8 +247,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Number of worst hands to show (default 10)",
     )
     parser.add_argument(
-        "--limit", type=int, default=200,
-        help="Max submissions to fetch (default 200)",
+        "--limit", type=int, default=100,
+        help="Max tables to fetch (default 100, server cap 100)",
     )
     parser.add_argument(
         "--out", default=None,
@@ -232,11 +267,28 @@ def main(argv: Optional[list[str]] = None) -> int:
         )
         return 2
 
+    # Default to the configured competition if no --match given.
+    competition_id = args.match or os.environ.get("ARENA_COMPETITION_ID")
+
     base = os.environ.get("ARENA_API_BASE", DEFAULT_BASE)
     client = ArenaClient(base, api_key=api_key)
     try:
-        subs = _fetch_submissions(client, agent_id, args.match, args.limit)
-        report = analyze(subs, top_n=args.top)
+        # Resolve agent_id from /agent/me if missing.
+        if not agent_id:
+            try:
+                me = client.get("/agent/me")
+                if isinstance(me, dict):
+                    agent_id = me.get("id") or me.get("agentId")
+            except ArenaError as e:
+                print(f"[analyze] /agent/me failed: {e}", file=sys.stderr)
+        if not agent_id:
+            print("ERROR: could not resolve agentId.", file=sys.stderr)
+            return 2
+
+        tables = _fetch_recent_tables(client, agent_id, competition_id, args.limit)
+        chip_deltas = _fetch_replays(client, agent_id, args.limit)
+        report = analyze(tables, chip_deltas, agent_id, top_n=args.top)
+
         if args.out:
             Path(args.out).write_text(report)
             print(f"wrote → {args.out}")

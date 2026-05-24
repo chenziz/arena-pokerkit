@@ -2,6 +2,17 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.1] — 2026-05-24
+
+### Fixed
+- `pokerkit analyze` now calls the correct Texas Hold'em endpoints
+  (`/texas/recent-tables` + `/agent/{agentId}/replays`) instead of the
+  prediction-style `/agent/submissions` (which returns 400 for Texas
+  competitions). Validated end-to-end against a live Poker Eval S5
+  match. Report now joins hole cards / position / board / winners from
+  `recent-tables` with precise `chipDelta` per hand from `replays`.
+- `/replays` limit clamped to 50 (server cap).
+
 ## [0.5.0] — 2026-05-23 — "Heuristic Learning Release"
 
 ### Added

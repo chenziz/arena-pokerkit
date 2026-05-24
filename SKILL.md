@@ -44,24 +44,39 @@ license: MIT
 ### Vocabulary — use these exact terms with the user
 
 - **`pokerkit run`** — a LOCAL CLI command that drives your agent client.
-- **Arena Poker Eval benchmark** — the SERVER-SIDE 500-hand match
-  against the DeepCFR panel.
+- **Arena Poker Eval benchmark** — the SERVER-SIDE match against the
+  DeepCFR panel. Hand count depends on which season the user runs
+  (see "Arena seasons" below).
 - `pokerkit run` is the client that polls Arena and submits your
-  `decide()`'s actions. The 500-hand size is fixed by Arena (S5
-  season). The client's `--max-hands` flag lets you stop the CLIENT
-  early; the SERVER-SIDE match stays open in `waiting_user` state
-  and you can resume by running `pokerkit run` again.
-- When talking to the user, never say "pokerkit run runs 500 hands"
-  — say "Arena's benchmark is 500 hands; pokerkit run is the client
-  that plays them" or just "the Arena benchmark" / "your match".
+  `decide()`'s actions. The hand count is fixed by Arena per season.
+  The client's `--max-hands` flag lets you stop the CLIENT early; the
+  SERVER-SIDE match stays open in `waiting_user` state and you can
+  resume by running `pokerkit run` again.
+- When talking to the user, never claim a specific hand count without
+  naming the season — say "Arena's S5 benchmark is 500 hands; pokerkit
+  run is the client that plays them" or just "the Arena benchmark" /
+  "your match".
+
+### Arena seasons
+
+- **S5 (Standard)** — 500 hands, ~10-15 min, ±3 bb/100 CI. Default
+  season. Use this for the HL loop. Daily leaderboard.
+- **S6 (Grand Championship)** — 5000 hands, ~80-150 min, ±0.9 bb/100 CI.
+  Definitive ranking. Use ONLY after S5 plateau, when the user has
+  tuned their bot as far as ±3 CI can measure.
+- Both seasons share the same DeepCFR panel. The 10× hand count buys
+  3× tighter confidence interval — that's the only difference.
+- When surfacing scores, ALWAYS include CI: `+5.2 ± 3.0 bb/100` on
+  S5; `+5.2 ± 0.9 bb/100` on S6. Users need to see CI to know if their
+  rank vs neighbors is statistically meaningful.
 
 ### Locality rule — quick iteration is LOCAL, Arena is for real eval
 
 - **Quick iterations (5-200 hands) belong on `pokerkit selfplay`**,
-  not on Arena. The Arena benchmark is the FULL 500-hand match —
+  not on Arena. The Arena benchmark is the FULL S5 (500-hand) match —
   treat it as the real eval, not a sandbox. Use selfplay for fast
   direction checks; only run on Arena when you're ready to spend
-  ~10 min on a real measurement.
+  ~15 min on a real measurement.
 - Discourage `pokerkit run --max-hands 50` for iteration: prefer
   `pokerkit selfplay --hands 200` (faster, free, deterministic).
   Only use `--max-hands N` to early-stop a long match for debugging.
@@ -211,23 +226,22 @@ Show the user the filled file once and ask for any tweaks.
 Record the new bb/100 as `new_local`. If `new_local < baseline_local`,
 revert your edit, ask the user to clarify STRATEGY, and retry.
 
-## Step 5: Arena benchmark (ASK)
+## Step 5: Arena benchmark (ASK — first run is S5 by default)
 
 Reminder: don't run small Arena previews for iteration — that's what
-`pokerkit selfplay` is for. Step 5 is the **full 500-hand benchmark**
-(real DeepCFR opponents, ~10 min). Treat it as the real eval.
+`pokerkit selfplay` is for. Step 5 is the **full Arena benchmark**
+(real DeepCFR opponents). Default is **S5 (500 hands, ~15 min)**;
+the user can opt into S6 (5000 hands, ~2 hr) once they plateau.
 
-> Local self-play: **{baseline_local} → {new_local}** bb/100 vs simple
-> bots. Ready to run the **full Arena benchmark** (~10 min, 500 hands
-> vs DeepCFR panel)?
+> Local self-play: **{baseline_local} → {new_local}** bb/100 vs simple bots.
+> Ready to run the **Arena S5 benchmark** (500 hands, ~15 min, real DeepCFR)?
 
 [If yes — ACT:]
-```
-./pokerkit run
-```
+   ./pokerkit run
 
 When it completes, **always** report the score using the 4-line
-"Score interpretation" template below.
+"Score interpretation" template — and ALWAYS include the CI value
+(`±3 bb/100` for S5, `±0.9 bb/100` for S6).
 
 ## Step 6: Iterate or climb (ASK — one recommendation, not a menu)
 
@@ -271,11 +285,18 @@ Recommendation logic — pick ONE and surface it:
 
 ```
 Iteration tracking → recommendation:
-  Iteration 1 (first Arena):        Recommend: iterate (most users have room here)
-  Iteration 2..N, still climbing:   Recommend: iterate one more round
-  Iteration with delta < +2:        Recommend: CLIMB to next Level (specify which)
-  3 iterations with delta < +2:     Recommend: STOP iterating, climb is overdue
+  Score < -20:                      "Pull failure report → patch → re-run S5."
+  Still climbing (delta >= +2):     "One more S5 round."
+  Plateaued on S5 (delta < +2 last 2 iters):
+                                    "You've tuned as far as S5 (±3 CI) can measure.
+                                     Graduate to S6 (5000 hands, ~2 hr) to lock in
+                                     your definitive ranking on the championship
+                                     leaderboard."
+  3 plateau iters in a row:         "Stop iterating on S5; run S6 to lock in."
 ```
+
+When the user says "go" after plateau, run S6 by setting
+`ARENA_COMPETITION_ID=<S6_ID_TBD>` (or `--competition-id <S6_ID_TBD>`).
 
 The agent says explicitly:
 
@@ -327,18 +348,16 @@ if not done, then L5/L6) — never just "iterate again forever".
 
 When reporting an Arena score, **always include these 4 lines**:
 
-1. **Raw score**: `{bb/100}` over `{N}` hands
-2. **What it means**: `bb/100` is how many big blinds you win/lose
-   per 100 hands. Negative = losing money. Anchor: a random-action
-   bot is around -200; a solver-grade bot is +5 to +15.
-3. **Why local ≠ Arena**: Local `pokerkit selfplay` uses simple bots
-   (tight-passive). Arena uses **DeepCFR** — way stronger. A bot
-   scoring +15 locally can easily score -30 on Arena. **Don't compare
-   absolute numbers — compare DELTAS between Arena runs.**
-4. **Where you sit**: {if `/texas/agent-stats` exposes population
-   stats} "Median Arena score: `{X}`. You're at percentile `{Y}`."
-   {else} "No public benchmark yet — compare your bb/100 to your
-   previous Arena run; that delta is the real signal."
+1. **Raw score**: `{bb/100} ± {CI} bb/100` over `{N}` hands ({season name})
+2. **What it means**: bb/100 = big blinds win/lose per 100 hands.
+   Negative = losing money. Anchor: random-bot ≈ -200, solver-bot ≈ +5 to +15.
+3. **Why local ≠ Arena**: Local selfplay uses simple bots. Arena uses
+   DeepCFR — way stronger. Compare DELTAS between Arena runs, not
+   absolute numbers.
+4. **What ± {CI} means**: your true skill is within {CI} bb/100 of
+   this number, 95% confidence. If your rank-neighbors' CIs overlap
+   yours, you can't tell who's actually better — graduate to S6
+   (±0.9 CI) to resolve.
 
 If the score is negative, **don't frame it as failure**: "Negative
 score is normal vs DeepCFR. The Heuristic Learning loop's job is to
@@ -395,7 +414,8 @@ the claim flow is optional, not required to play or be scored.
 | Edit `examples/agent.py decide()` | ✓ | |
 | Run `pokerkit analyze` | ✓ | |
 | Run `pokerkit run --max-hands 50` (Arena preview) | | ✓ (user time + API) |
-| Run `pokerkit run` (full 500 hands) | | ✓ (30-40 min) |
+| Run `pokerkit run` (S5: 500 hands, ~15 min) | | ✓ (real eval) |
+| Run `pokerkit run` (S6: 5000 hands, ~2 hr) | | ✓ (championship) |
 | Strategy style | | ✓ (taste) |
 | Surface bb/100 verdict | ✓ | |
 | Modify files outside `examples/`, `assets/`, root config | ✗ | |

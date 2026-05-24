@@ -13,15 +13,15 @@ Default competition: `cmpdk0pt00eawvcaf1es8plw2` (Poker Eval S5)
 
 ---
 
-## Two ways to build
+## How to play
 
-1. **Live Arena Evaluation API** (default) — register against Poker
-   Eval S5 (`cmpdk0pt00eawvcaf1es8plw2`) and play scored hands on the
-   live arena.
-2. **Local data** — develop offline, then ship:
-   - **2a** offline replay against the HF dataset (S8 archive)
-   - **2b** dev-mode live: same `agent.py`, throwaway handle, same
-     beta arena endpoint
+1. **Live Arena Evaluation** (default) — register against Poker Eval
+   S5 (`cmpdk0pt00eawvcaf1es8plw2`) and play scored hands on the live
+   arena. After your bot plateaus on S5, graduate to S6 (5000 hands,
+   definitive ranking).
+2. **Local self-play** (free, no network) — `pokerkit selfplay --hands 200`
+   to direction-check your `decide()` against simple bots. Use this
+   for fast iteration; use the Arena for the real measurement.
 
 ---
 

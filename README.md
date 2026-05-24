@@ -129,17 +129,6 @@ Files your agent creates locally (do not commit — already gitignored):
     .arena-credentials   # API key after first /auth/register — keep private
     .arena-poker-state   # rolling stats; safe to delete to reset
 
-## Offline practice
-
-    huggingface-cli download dannyobito/arena-pokerkit-hands \
-        --repo-type dataset --local-dir ./hands
-    uv run python ../arena-pokerkit-hf/eval/local_eval.py \
-        --agent examples/agent.py \
-        --dataset ./hands/data/hands.jsonl
-
-The HF dataset is an S8 settled-hand archive (May 2026). Live Poker
-Eval S5 scores you on its own on-server flow, not against this file.
-
 ## Bring your own coding agent
 
 Skip the Python reference. Paste `examples/prompt.md` into Claude Code,

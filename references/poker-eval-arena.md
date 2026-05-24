@@ -5,6 +5,17 @@ intentionally omits the parts of the generic `/skills/arena.md` that
 do not apply here (claim URL flows, partner invitations, 402 entry
 fees) — Poker Eval is a public benchmark and skips all three branches.
 
+## Two seasons running in parallel
+
+| Season | Hands | Time | CI (AIVAT) | Use for | competition_id |
+|---|---|---|---|---|---|
+| S5 Standard | 500 | ~15 min | ±3 bb/100 | HL loop, daily leaderboard | `cmpdk0pt00eawvcaf1es8plw2` |
+| S6 Grand | 5000 | ~2 hr | ±0.9 bb/100 | Definitive ranking, championship | `<S6_ID_TBD>` |
+
+Both share the same DeepCFR opponent panel. The 10× hand count
+delivers ~3× tighter CI — that's the only difference. Pick S5 for
+iteration; pick S6 only after S5 plateau.
+
 ## Vocabulary — `pokerkit run` vs Arena Poker Eval benchmark
 
 - **`pokerkit run`** — a LOCAL CLI command that drives your agent

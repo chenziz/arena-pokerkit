@@ -2,6 +2,87 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.13.0] — 2026-05-25 — "Two Seasons + Graduation — S5 daily, S6 definitive"
+
+Arena now runs **two Poker Eval seasons in parallel** against the same
+DeepCFR panel. S5 (500 hands, ~15 min, ±3 bb/100 CI) is the daily
+competitive tier and the new default for the HL loop. S6 (5000 hands,
+~2 hr, ±0.9 bb/100 CI) is the championship / definitive tier; users
+graduate there only after they've plateaued on S5. This release wires
+the skill's vocabulary, plateau logic, score template, and reference
+docs around the two-season model — replacing the implicit single-season
+assumption that pre-dated S6.
+
+### Added — explicit two-season setup
+
+- **`.env.example`** documents both competitions: S5 active (default,
+  `cmpdk0pt00eawvcaf1es8plw2`), S6 commented out with `<S6_ID_TBD>`
+  placeholder. Includes per-season hands / time / CI in the inline
+  comments so a user reading the file alone understands the tradeoff.
+- **`references/poker-eval-arena.md`** opens with a two-season table
+  (Season / Hands / Time / CI / Use for / competition_id) so anyone
+  landing there knows S5 vs S6 in one glance.
+- **`SKILL.md` Vocabulary** gains a new "Arena seasons" subsection
+  defining S5 and S6 and the rule "always show CI alongside bb/100".
+
+### Added — graduation recommendation in the plateau path
+
+- **`SKILL.md` Step 6 "Plateau / climb signal"** recommendation logic
+  now emits S5 → S6 as the graduation step, not "climb to next Level":
+  - `delta < +2` for last 2 iters → graduate to S6 (5000 hands, ~2 hr).
+  - 3 plateau iters → "stop iterating on S5; run S6 to lock in".
+- **`references/optimization-levels.md` Level 4** plateau callout
+  redirects users to S6 first ("S5 CI ceiling reached"), then to L5/L6
+  as the post-S6 climb. Iterating further on S5 once CI is saturated
+  is now explicitly discouraged.
+- When the user says "go" after plateau, the skill swaps in
+  `ARENA_COMPETITION_ID=<S6_ID_TBD>` (or `--competition-id <S6_ID_TBD>`).
+
+### Changed — Score interpretation template now teaches CI
+
+- **Line 1** now reports `{bb/100} ± {CI} bb/100` over `{N}` hands
+  (plus season name) — CI is no longer hidden behind a footnote.
+- **Line 4** replaces the old "where you sit" percentile placeholder
+  (which depended on `/texas/agent-stats` population stats nobody has
+  shipped yet) with a concrete CI semantics explanation: "your true
+  skill is within {CI} bb/100 of this number, 95% confidence. If your
+  rank-neighbors' CIs overlap yours, you can't tell who's actually
+  better — graduate to S6 (±0.9 CI) to resolve."
+- Step 5's ASK prompt is rephrased: "Arena S5 benchmark (500 hands,
+  ~15 min, real DeepCFR)" — no more bare "full benchmark" without a
+  season label.
+
+### Changed — vocabulary stops hard-coding 500 hands
+
+- The "pokerkit run vs Arena Poker Eval benchmark" vocabulary block
+  no longer claims a 500-hand size as universal; it points at the
+  Arena seasons table for the canonical hand counts. The locality
+  rule still references S5's ~15 min as the iteration baseline.
+
+### Where the S6 placeholder lives
+
+`<S6_ID_TBD>` appears in: `.env.example` (commented), `SKILL.md` Step
+6 fallback ("set `ARENA_COMPETITION_ID=<S6_ID_TBD>`"), and the
+`references/poker-eval-arena.md` two-season table. Swap all three
+occurrences when Arena backend issues the real S6 competition_id.
+
+### Verified
+
+- `./pokerkit test` → 19/19 still pass.
+- `./pokerkit version` → `0.13.0`.
+- `grep "S6_ID_TBD" *.md examples/.env.example references/*.md` →
+  placeholder is documented in at least three locations, not hidden.
+- `grep "500 hands" SKILL.md` → only appears in S5 context; no longer
+  used as a default match-size claim.
+- Score interpretation template has CI on Line 1 AND Line 4 explanation.
+
+### Migration
+
+None. Existing `.env` files still point at S5 by default. Users with
+v0.12.x `.arena-credentials` keep them; the S5 competition_id is
+unchanged. To run S6 once the backend exposes the real id, swap
+`ARENA_COMPETITION_ID` in `.env` (or pass `--competition-id`).
+
 ## [0.12.1] — 2026-05-25 — "Handle collision auto-recovery"
 
 A fresh-environment dogfood run hit `409 Handle already taken` on the

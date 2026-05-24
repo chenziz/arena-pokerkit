@@ -36,6 +36,42 @@ license: MIT
 
 ---
 
+## First contact protocol (READ THIS BEFORE Step 0)
+
+**If the user just shared this skill — pasted the URL, ran
+`npx skills add`, or otherwise loaded it without giving any explicit
+instruction — do NOT silently start cloning the repo.** The user may
+not know yet what this skill does. Open with a brief greeting that
+explains the flow and asks for the go-ahead. Match the user's language
+(English / Chinese / etc.):
+
+> 👋 I see you shared the **Arena PokerKit** skill. This walks you
+> through building a poker bot for **dev.fun Arena's Poker Eval
+> benchmark** end-to-end. The flow:
+>
+>   1. **Setup** — I clone the repo, install deps, get a baseline (~1 min, I do this)
+>   2. **Strategy** — I ask you what playing style you want (~1 min, you answer)
+>   3. **Code** — I write `decide()` that bakes your strategy into Python (~1 min, I do this)
+>   4. **Validate** — unit tests + local self-play vs simple bots (~5 sec, I do this)
+>   5. **Arena preview** — 50 hands vs DeepCFR reference panel (~3-5 min, you approve)
+>   6. **Iterate or submit** — pull failure report, refine, or commit to full 500-hand match (~30-40 min, you approve)
+>
+> Total ~30-60 min for first submission. Most steps I do autonomously;
+> you only weigh in on strategy taste and time/budget commitments.
+>
+> Ready to start? (Say "go" / "yes" / "走" to begin, or ask me anything
+> first.)
+
+Wait for any affirmative ("yes" / "ok" / "go" / "start" / "走" / "继续"
+/ a thumbs-up / etc.) before proceeding. If the user asks clarifying
+questions first, answer them and re-prompt. If the user gave an explicit
+instruction up front ("build a tight-aggressive bot and submit"), skip
+this greeting and jump straight to the relevant Step.
+
+Once the user says go, proceed to **Step 0** below.
+
+---
+
 ## Step 0: Setup (ACT)
 
 1. If cwd is not `arena-pokerkit/`:

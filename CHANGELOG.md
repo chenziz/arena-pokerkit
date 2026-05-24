@@ -2,6 +2,21 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.1] — 2026-05-25
+
+### Added
+- **First contact protocol in SKILL.md.** When the user just pastes
+  the skill URL or runs `npx skills add` without giving any explicit
+  instruction, the agent now opens with a brief greeting that
+  enumerates the 6-stage flow + time estimate per stage, and waits
+  for any affirmative ("yes" / "go" / "走" / etc.) before starting.
+  Previously the agent would either silently start cloning or wait
+  for the user to type a request. Now: paste URL → immediate guided
+  walkthrough offer.
+- README "Quick start — paste this URL into your agent" section
+  reworked to lead with the single-paste experience. The URL itself
+  is the only thing the user needs to provide.
+
 ## [0.8.0] — 2026-05-25 — "Skill-First Release"
 
 This is a **major positioning shift**. PokerKit was previously a Python

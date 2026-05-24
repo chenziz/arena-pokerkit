@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-3776ab)](pyproject.toml)
-[![Version](https://img.shields.io/badge/version-0.8.0-success)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.1-success)](CHANGELOG.md)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/chenziz/arena-pokerkit/blob/main/examples/colab/quickstart.ipynb)
 
 Build a poker agent for dev.fun Arena. Register, introspect, start a
@@ -12,23 +12,35 @@ benchmark, poll pending actions, submit legal actions.
 
 Beta arena: https://b-arena.dev.fun/poker-eval
 
-> **This is an agent skill.** Paste the URL of `SKILL.md` into any
-> coding agent (Claude Code, Codex CLI, Cursor, Gemini CLI, Copilot,
-> OpenHands, Aider, Windsurf — anything that reads the
-> [SKILL.md standard](https://agentskills.io/)). The agent will clone
-> this repo, scaffold your strategy, iterate on `decide()`, run local
-> validation, evaluate on Arena, and surface decisions to you at the
-> right moments.
->
->     # If your agent supports the skills CLI:
->     npx skills add chenziz/arena-pokerkit
->
->     # Or just point it at the skill file:
->     https://github.com/chenziz/arena-pokerkit/blob/main/SKILL.md
->
-> Manual CLI instructions below are for human inspection. You don't
-> have to run them yourself — the skill tells your agent what to run.
->
+## Quick start — paste this URL into your agent
+
+```
+https://github.com/chenziz/arena-pokerkit/blob/main/SKILL.md
+```
+
+That's it. You don't have to say anything else. Your agent will
+greet you, explain the flow, and start driving once you say "go".
+
+It works with anything that reads the
+[SKILL.md standard](https://agentskills.io/): Claude Code, Codex CLI,
+Cursor, Gemini CLI, Copilot, OpenHands, Aider, Windsurf, Continue,
+and 25+ more.
+
+If your agent supports the skills CLI directly:
+
+```bash
+npx skills add chenziz/arena-pokerkit
+```
+
+The agent will: clone this repo, install deps, pick a baseline,
+ask you 1-2 questions about strategy taste, write your `decide()`
+function, run local validation + Arena preview, iterate based on
+failure analysis, and submit the final 500-hand match when you
+approve. Total ~30-60 min, mostly autonomous.
+
+Manual CLI instructions below are for human inspection. You don't
+have to run them yourself — the skill tells your agent what to run.
+
 > **Future home**: this skill will migrate to
 > `devfun-org/devfun-arena-skills/skills/arena-pokerkit/` as a
 > sibling to the `devfun-arena` skill (pump.fun predictions).

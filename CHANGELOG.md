@@ -2,6 +2,83 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.0] — 2026-05-25 — "Arena Starter Kit — gamified onboarding, 3 paths, milestone tracking"
+
+Real dogfood feedback drove a major UX redesign of first-contact.
+Research surveyed 10 gamified onboarding products (Duolingo, Kaggle,
+ARC Prize, Battlesnake, Numerai, Lux AI, Battlecode, AoC, Vercel,
+Codecademy) — design notes at
+`brain/sessions/2026-05-25/07-50-research-onboarding.md`.
+
+### Renamed — product label
+
+- **"PokerKit" → "Arena Starter Kit"** as user-facing product name
+  (collision with upstream `prinai/pokerkit` engine we depend on).
+  The **CLI binary stays `pokerkit`** — `./pokerkit run` still works.
+
+### Reframed — Poker Arena vs Poker Eval
+
+The previous greeting implied "win prize money by playing Poker Eval".
+Wrong. Correct positioning:
+
+- **Poker Arena** = upcoming official tournament with ~$50K prize
+  pool. Top finishers may also be invited to the Researcher Track.
+- **Poker Eval** = training arena. No prize. Where you build, iterate,
+  and battle-test your bot BEFORE Poker Arena opens. When the
+  tournament launches, you plug in the bot you tuned here.
+
+### Removed — specific opponent names from user copy
+
+- "DeepCFR" no longer appears in greeting / hook / score interp.
+  Replaced with "Arena's reference panel" — model may swap over time.
+  Backend reality kept as one footnote in `references/poker-eval-arena.md`.
+
+### Added — new greeting + 3-path router
+
+- **165-word greeting** in `SKILL.md` replacing v0.14's 6-step list.
+  Structure: welcome → Poker Arena hook → Poker Eval framing →
+  stake-stat hook ("~30 vs ~3 bb/100, the gap is the game") → 3-path
+  CTA. Inspired by ARC Prize's "humans 100% vs AI 0.51%" framing.
+- **`paths/quick.md`** — no questions, auto-default bot
+  (`assets/decide_textured.py`), lands user on first Arena score in
+  ~10 min. Inspired by Numerai's `example_predictions.csv`.
+- **`paths/guided.md`** — pauses for style choice, explains as we go
+  (the v0.14 default flow).
+- **`paths/learn.md`** — explains Arena scoring, bb/100, the
+  reference panel before commit. For "tell me more first" users.
+
+### Added — milestone tracking (gamification layer)
+
+- **10 named milestones** with explicit labels (Codecademy pattern):
+  Kit Connected → First Hand Played → Style Chosen → Local Eval Green
+  → **First Arena Score** (★ <10 min on quick) → Beat Baseline →
+  Positive bb/100 → Plateau Broken → Submitted to Poker Eval →
+  Leaderboard Listed.
+- **`.pokerkit-milestones.json`** state file tracks unlock timestamps.
+- Pop notification + persistent progress bar rendered by agent:
+  `🎯 Milestone unlocked — First Arena Score (+4/10)` then
+  `Progress: ████░░░░░░ 4/10 · Next: Beat Baseline`.
+
+### Added — progressive disclosure
+
+- 6-level optimization ladder hidden from first contact (Duolingo's
+  reveal-when-needed pattern). Iteration menu / S6 graduation
+  revealed only after relevant milestones. Never >3 options at once.
+
+### Verified
+
+- 21/21 pytest tests pass.
+- `./pokerkit version` reports `0.15.0`.
+- `grep "PokerKit" SKILL.md README.md AGENTS.md` — only in CLI
+  command examples (`./pokerkit run`), never as product name.
+- `paths/quick.md`, `paths/guided.md`, `paths/learn.md` exist.
+
+### Migration
+
+No code-behavior changes. Existing CLI commands work identically.
+Only the user-facing prompts in `SKILL.md` + new `paths/` files
+have changed.
+
 ## [0.14.0] — 2026-05-25 — "Backend Truth + Greeting V2 — DeepCFR confirmed, AIVAT removed, real S6 ID"
 
 Fact-checked the skill against the devfun backend (`~/devfun`) and

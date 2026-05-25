@@ -91,13 +91,13 @@ You climb the 4 stages against the same panel. Each stage closes
 ```
 That's the setup. Ready to actually build one?
 
-  • `quick`              — I drive all 4 stages, ~1 hr, you approve at boundaries
-  • `guided`             — Same 4 stages, you participate actively (pick style,
+  • `quick`              — I drive all 4 stages, ~20 min, you approve at boundaries  ← default if you press enter
+  • `guided`             — Same 4 stages, ~45 min, you participate (pick style,
                           edit Strategy.md, choose research)
-  • `skip to research`   — You already have a style + strategy, jump to Stage 3
-  • `skip to HL loop`    — You already have a working bot, jump to Stage 4
+  • `skip-research`      — You already have a STRATEGY.md, jump to Stage 3 (~25 min)
+  • `iterate`            — You already have a working bot, jump to Stage 4 (~1-2 hr)
 
-Type one.
+Type one (or just `go` for `quick`).
 ```
 
 If the user keeps asking questions, answer them but always offer the

@@ -73,8 +73,12 @@ Full version: references/permissions.md.
 ```
 
 **Step 2 — narrated setup.** Run the same setup commands as
-`paths/quick.md`. While they run, drop **one sentence each** about
-what's happening:
+`paths/quick.md`. **Run `./pokerkit test` and `./pokerkit selfplay`
+in parallel / background** — narrate while they run, surface result
+as `🎯 Tests passed: 34/34` and `🎯 Selfplay baseline: +X.X bb/100`
+when each completes. Never block the user reading narration.
+
+While the commands run, drop **one sentence each** about what's happening:
 
 - `git clone` — *"Pulling the kit. Thin Python wrapper around
   Arena's API plus 3 reference `decide()` implementations."*
@@ -96,6 +100,18 @@ Print:
 ```
 Repo ready. Baseline against local bots: {baseline_local} bb/100.
 (That's vs simple local opponents — Arena's reference panel is way stronger.)
+```
+
+**3-question feedback at this Stage transition:**
+
+```
+✓ What just happened: cloned + installed + background tests
+  {M}/{M} pass + local baseline {N} bb/100.
+✓ Why this matters: env works, `decide()` is legal. Local bots are
+  way weaker than Arena's panel — local numbers do NOT predict Arena.
+✓ What's next: Stage 1 (Style) — I walk you through 4 quick decision
+  spots (Q1-Q4) with EV feedback so you LEARN your style instead of
+  just picking one. ~3 min.
 ```
 
 ---
@@ -327,7 +343,7 @@ style pre-selected based on the profile. User can override.
                             playstyle in mind (~1-2 minutes of deeper
                             interview, not an instant generation).
 
-  Type a letter, or `go` for (a).
+  Type a letter, or `go` / enter for (a) tight-aggressive default.
 ```
 
 Map:
@@ -370,7 +386,7 @@ You can pick either:
 Most users do 500-hand a few times during HL loop, then one 5000-hand
 when they've plateaued and want the locked-in number.
 
-Pick: `500` / `5000`.   (or `inspect` first to see examples/agent.py)
+Pick: `500` / `5000`.   (or `go` / enter → defaults to `500`; `inspect` to see examples/agent.py first)
 ```
 
 On the user's pick, run `./pokerkit run` with the right competition
@@ -380,7 +396,19 @@ On terminal state, surface the score with the **4-stage anchor
 table** marking Stage 1 with "← you ran this". Include the 4-line CI
 explainer (this is the first Arena run).
 
-Then ASK approval for Stage 2.
+**3-question feedback at this Stage transition:**
+
+```
+✓ What just happened: Stage 1 ({style_label}, picked from your Q1-Q4
+  profile) on Arena → {bb_per_100} ± {CI} bb/100 vs the panel.
+✓ Why this matters: this is your honest baseline. Any future stage's
+  lift is measured against this number — not against local selfplay.
+✓ What's next: Stage 2 — STRATEGY.md spec with ranges + sizing +
+  adaptation. You can edit it inline before I wire it in. ~5 min to
+  write + ~5 min to edit + ~15 min Arena.
+```
+
+Then ASK approval for Stage 2 (default = `go` on enter).
 
 ---
 
@@ -397,7 +425,7 @@ Then ASK approval for Stage 2.
 
   Before I write it, do you want to:
 
-  • `go`       — I write it based on your tight-aggressive style
+  • `go`       — I write it based on your tight-aggressive style  ← default if you press enter
   • `outline`  — show me the section headers first, I'll pick
   • `template` — just copy the blank template, I'll fill it in myself
 ```
@@ -412,7 +440,7 @@ about any line.
 
 {full_strategy_md_or_first_30_lines}
 
-  • `go`         — wire it into decide() and validate locally
+  • `go`         — wire it into decide() and validate locally  ← default if you press enter
   • `edit X`     — change line/section X (you tell me what)
   • `explain Y`  — what does section Y mean
 ```
@@ -491,7 +519,7 @@ Then ASK (note: **no Arena option here as default**):
    Expected lift: +12 to +20 bb/100 over current. Should bring Arena
    score to -10 to -3.
 
-  • `go`           — start Stage 3 (Auto Research)
+  • `go`           — start Stage 3 (Auto Research)  ← default if you press enter
   • `show me`      — open STRATEGY.md and walk through it again first
   • `edit more`    — tweak STRATEGY.md again before Stage 3
   • `arena anyway` — measure Stage 2 on Arena now (will likely score
@@ -548,7 +576,7 @@ bot looks up the right answer before deciding. Expected lift: +12 to
     (2) Board texture buckets (dry/wet/paired)   → research/board_textures.json
     (3) Opponent HUD via /texas/agent-stats      → pulled per match
 
-  • `all`       — pull all three (recommended)
+  • `all`       — pull all three (recommended)  ← default if you press enter / `go`
   • `1`, `1,2`  — pick specific sources
   • `skip`      — keep current bot, run Arena anyway
 ```
@@ -608,14 +636,26 @@ later iterations, pop `plateau_broken` if triggered.
 Three options at every iteration boundary, never more:
 
 ```
-  • `go`       — one more iteration
+  • `go`       — one more iteration  ← default if you press enter
   • `show me`  — read failure_report.txt + the proposed patch
   • `stop`     — lock in current score
 ```
 
+**3-question feedback after each iteration:**
+
+```
+✓ What just happened: round {n} patched {pattern} → {prev} → {curr}
+  bb/100 ({delta:+}).
+✓ Why this matters: {real lift if >+2; noise within ±20 CI if
+  |delta|<5; regression if negative — will revert if next round
+  confirms}.
+✓ What's next: read failure_report.txt for next leak, propose patch,
+  re-run 500-hand. ~10 min. Or `stop` to lock in.
+```
+
 When plateau hits, offer the standard 2-option Arena picker (`500` /
-`5000`) — most users have been on 500 the whole loop and want a
-5000-hand run to lock in their definitive number.
+`5000` — default `500` on enter) — most users have been on 500 the
+whole loop and want a 5000-hand run to lock in their definitive number.
 
 ---
 

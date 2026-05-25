@@ -1,6 +1,6 @@
 ---
 name: arena-pokerkit
-version: 0.18.6
+version: 0.18.7
 description: Use this skill whenever the user wants to build, improve, register, or submit a poker bot to dev.fun Arena's Poker Eval benchmark. Trigger on "build a poker bot", "join poker eval", "improve my arena agent", "submit poker bot", "arena starter kit", "pokerkit", or any mention of the poker-eval arena. Handles cloning, installation, strategy elicitation, decide() editing, local self-play validation, Arena evaluation, replay analysis, and submission end-to-end. Asks the user only for strategy taste and submission approval; runs all build/test/run commands autonomously.
 license: MIT
 ---
@@ -37,6 +37,12 @@ license: MIT
   ask the user**.
 - **Never** silently escalate to Level 5 (paid LLM) or Level 6
   (trained weights) without explicit user opt-in.
+- **Never** read or write files outside the cloned `arena-pokerkit/`
+  repo directory. No path traversal via `../`, no absolute paths
+  outside the repo root, no symlink-follow tricks. (Repo scope.)
+- **Never** spawn shells or subprocesses outside the documented
+  `./pokerkit *` and `uv run *` commands. If you think you need
+  another binary, **stop and ask the user**. (Subprocess scope.)
 
 > Detailed operating rules: **`references/agent-rules.md`** (READ FIRST).
 > Network allowlist: **`references/network-policy.md`**.
@@ -132,6 +138,8 @@ Quick references you'll likely also want:
 - `references/optimization-levels.md` — 6-level ladder
 - `references/heuristic-learning.md` — HL loop philosophy
 - `references/output-parsing.md` — selfplay/analyze/run output regex
+- `references/path-comparison.md` — 5-path flow table + per-path
+  invariants + 3-question feedback template + parallel-test rule
 
 ---
 
@@ -175,14 +183,37 @@ artifact you own and a visible score lift:
 
 Most users walk through 1 → 2 → 3 → 4 in ~1 hour. All free.
 
-**Pick your path:**
-  • `quick`              — I drive all 4 stages, you approve at boundaries (~1 hr)
-  • `guided`             — Same 4 stages, you participate actively (pick style, edit Strategy.md, choose research)
-  • `learn`              — Explain Arena scoring + how the bot works first
-  • `skip to research`   — You already have a style + strategy, jump to Stage 3
-  • `skip to HL loop`    — You already have a working bot, jump to Stage 4 (curriculum)
+**Pick your path** (each tells WHO it's for, TIME, WHAT we do):
 
-Type one. Let's go.
+```
+▶ quick   — give me a working bot, don't make me think about poker
+   适合你如果：第一次玩 / 不懂 poker / 想 20 分钟看到分数
+   ⏱  ~20 min  ·  你只说 2-3 次 "yes/继续"
+   🎯 我用默认 tight-aggressive 风格写代码 + 跑 Arena 一次
+
+▶ guided  — I know some poker, I want a bot that plays MY way
+   适合你如果：会打几手 NLHE / 对打法有偏好 / 想让 bot 反映你的判断
+   ⏱  ~45 min  ·  你回答 4-6 个具体牌局问题（带 EV 反馈）
+   🎯 我用你的回答推风格 → 写 STRATEGY.md → 写代码 → 跑 Arena
+
+▶ learn   — explain Arena and bb/100 first
+   适合你如果：完全没概念 / 想先理解再开始
+   ⏱  ~5 min 讲完，之后选 quick 或 guided
+   🎯 我解释 Arena scoring / 对手 panel / 比赛流程，不动代码
+
+▶ skip-research — I have a STRATEGY.md, add data to the bot
+   适合你如果：已经有策略文件 / 知道你要哪种 style
+   ⏱  ~25 min  ·  跳过风格问答，直接进数据接入
+   🎯 读你的 STRATEGY.md → 拉 GTO chart + 对手 HUD → 写进 decide()
+
+▶ iterate — I have a working bot, keep improving it
+   适合你如果：有能跑的 decide() / 想冲 leaderboard
+   ⏱  ~1-2 hr  ·  你看每轮失败分析后 approve patch
+   🎯 跑 Arena → 读 failure_report → patch decide() → 再跑 → 重复
+```
+
+Type one (`quick` / `guided` / `learn` / `skip-research` / `iterate`).
+Or just say `go` for `quick` (the default). Let's go.
 ```
 
 Show that block verbatim (translated to user's language if not
@@ -200,8 +231,8 @@ start narrating Phase 1.
 | `quick` / `q` / `go` / `default` / affirmative with no other content | `paths/quick.md` |
 | `guided` / `g` / `walk me through` / `teach me` | `paths/guided.md` |
 | `tell me more` / `learn` / `explain` / `详细` / `more` / `info` | `paths/learn.md` |
-| `skip to research` / `skip research` / `i have a strategy` / `jump to stage 3` | `paths/skip-research.md` |
-| `skip to HL loop` / `skip to curriculum` / `i have a bot` / `jump to stage 4` | `paths/skip-hl.md` |
+| `skip-research` / `skip to research` / `skip research` / `i have a strategy` / `jump to stage 3` | `paths/skip-research.md` |
+| `iterate` / `skip to HL loop` / `skip-to-HL-Loop` / `skip to curriculum` / `i have a bot` / `jump to stage 4` | `paths/skip-hl.md` |
 | `show levels` / `advanced` / `levels` | Surface `references/optimization-levels.md` ladder table, then re-prompt |
 | Explicit task ("build me a tight-aggressive bot and submit") | Skip the greeting, jump to Step 0 with their constraint as the strategy answer |
 

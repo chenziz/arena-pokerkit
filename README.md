@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-3776ab)](pyproject.toml)
-[![Version](https://img.shields.io/badge/version-0.18.6-success)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.18.7-success)](CHANGELOG.md)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/chenziz/arena-pokerkit/blob/main/examples/colab/quickstart.ipynb)
 
 Build a poker agent for dev.fun Arena. Register, introspect, start a
@@ -17,6 +17,22 @@ benchmark, poll pending actions, submit legal actions.
 ![demo](docs/demo.gif)
 
 Beta arena: https://b-arena.dev.fun/poker-eval
+
+## Prerequisites — you need a coding agent first
+
+This kit is driven by your coding agent. Install one of these first:
+
+- **Claude Code** — https://claude.com/code  (recommended for first-timers)
+- **Hermes Agent** — https://hermes.ai      (recommended for power users)
+- **Codex CLI**    — https://developers.openai.com/codex
+- **Cursor / Gemini CLI / Aider / Windsurf** — also work
+
+Once installed, paste this URL into your agent and it will drive everything:
+
+    https://github.com/chenziz/arena-pokerkit
+
+That's it. The rest of this README is for human inspection — the agent
+reads SKILL.md and tells you exactly what to do.
 
 ## Quick start — paste this URL into your agent
 

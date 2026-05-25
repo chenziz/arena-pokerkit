@@ -2,6 +2,100 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.18.7] — 2026-05-25 — "README prereqs + path-clarity (WHO/TIME/WHAT) + one-key defaults + path-comparison table"
+
+Five user-feedback themes from a fresh first-time test. README assumed
+you already had a coding agent; path names used jargon; ASK blocks had
+implicit defaults; Stage transitions skipped "why this matters"; tests
+blocked user flow.
+
+### Added — README Prerequisites section at the top
+
+- `## Prerequisites — you need a coding agent first` lands above any
+  clone command. Names Claude Code (first-timers), Hermes (power
+  users), Codex CLI, Cursor / Gemini CLI / Aider / Windsurf with URLs.
+- The one-line "paste this URL into your agent" pattern stays — but
+  now the prerequisite is loud.
+
+### Changed — 5-path list uses WHO / TIME / WHAT template
+
+- Each path tells the user (a) "are you me?" persona, (b) wall-clock
+  + input count, (c) what we do for you. No more 1-line strings.
+- Example: `▶ quick — give me a working bot, don't make me think about
+  poker / 适合你如果：第一次玩 / ⏱ ~20 min · 2-3 次 "yes/继续" / 🎯
+  我用默认 tight-aggressive 风格 + 跑 Arena 一次`.
+- Five paths total: `quick` / `guided` / `learn` / `skip-research` /
+  `iterate`.
+
+### Renamed — `skip-to-HL-Loop` → `iterate` (both keywords still route)
+
+- New preferred name: `iterate` (no jargon, action verb). Old
+  `skip-to-HL-Loop`, `skip to HL loop`, `skip to curriculum` keywords
+  still route to `paths/skip-hl.md` for backward compat.
+- Routing table updated in `SKILL.md`. Path file `paths/skip-hl.md`
+  stays as-is to avoid breaking deep links.
+
+### Added — 3-question feedback at every Stage transition
+
+- Every Stage transition in every path file now answers:
+  (1) What just happened — with concrete numbers
+  (2) Why this matters — what the result proves and doesn't
+  (3) What's next — concrete next action + ETA
+- Audited Setup → Stage 1 → Stage 2 → Stage 3 → Stage 4 in
+  `paths/quick.md`, `paths/guided.md`, `paths/skip-research.md`,
+  `paths/skip-hl.md`. Iteration boundaries in Stage 4 also have the
+  3-question template.
+
+### Changed — Tests run in PARALLEL, never block user flow
+
+- `./pokerkit test` and `./pokerkit selfplay` now kick off in
+  background while narration continues.
+- Result surfaces as `🎯 Tests passed: 34/34` and `🎯 Selfplay
+  baseline: +X.X bb/100` when each completes.
+- If a test fails, surfaced out-of-band and flow stops until passing.
+- Documented in `paths/quick.md` Phase 1, `paths/guided.md` Phase 1,
+  `paths/skip-research.md`, and `references/path-comparison.md`.
+
+### Added — One-key defaults at every ASK
+
+- Every user ASK now provides explicit "press enter / `go` for
+  default" affordance. No more guessing.
+- Examples:
+  - Arena picker: `Pick: 500 / 5000.  (or go / enter → defaults to 500)`
+  - Stage transitions: `• go — write Strategy.md ← default if you press enter`
+  - Style menu: `Type a letter, or go / enter for (a) tight-aggressive default.`
+- Audited all ASK blocks in `paths/quick.md`, `paths/guided.md`,
+  `paths/skip-research.md`, `paths/skip-hl.md`, `paths/learn.md`.
+
+### Added — Two new Hard NEVERs (security tighten)
+
+- **Repo-scope NEVER**: never read or write files outside the cloned
+  `arena-pokerkit/` repo dir. No path traversal via `../`, no
+  absolute paths outside the repo root, no symlink-follow tricks.
+- **Subprocess NEVER**: never spawn shells or subprocesses outside
+  the documented `./pokerkit *` and `uv run *` commands. Out-of-scope
+  binaries (`curl`, `wget`, `npm`, arbitrary one-liners) = STOP and
+  ask the user.
+- Both added to `SKILL.md` Hard NEVERs block and detailed in
+  `references/agent-rules.md` Edit-scope section.
+
+### Added — `references/path-comparison.md` (NEW)
+
+- Full per-stage flow table across all 5 paths (0. 入口 → 7. HL Loop).
+- User input count + wall clock + final artifact per path.
+- "When to recommend each path" guide for the agent.
+- Cross-path invariants (8 rules that apply on every path).
+- 3-question feedback template documented in one place.
+- Parallel-tests rule documented in one place.
+- Note on `skip-to-HL-Loop` → `iterate` rename.
+
+### Notes
+
+- `SKILL.md` line count: 452 (still under 500-line cap).
+- All 34 unit tests pass on 0.18.7.
+- No changes to `examples/`, `assets/`, or `pokerkit` CLI behavior —
+  this is a docs/skill polish ship, not a code-behavior change.
+
 ## [0.18.6] — 2026-05-25 — "Best-Practices Pass — Hard NEVERs, Network policy, prompt-injection immunization, SKILL.md 500-line cap, first-turn handshake, pre-action confirms, Balanced 4th style"
 
 Comprehensive security + best-practices ship, informed by 7-source

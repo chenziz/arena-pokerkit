@@ -56,7 +56,7 @@ Stage 4 (curriculum) iterates on whatever decide() ships now. Your
 patches will be based on raw failure_report.txt patterns, not on
 strategy/research lookups.
 
-  • `go`             — iterate on the current decide()
+  • `go`             — iterate on the current decide()  ← default if you press enter
   • `back to stage 3` — wire research first, then iterate
   • `back to stage 2` — write STRATEGY.md first, then iterate
 ```
@@ -67,7 +67,7 @@ strategy/research lookups.
 This looks like a fresh repo. `skip to HL loop` assumes you have a
 working bot.
 
-  • `quick`       — start the full 4-stage walk (~1 hr)
+  • `quick`       — start the full 4-stage walk (~1 hr)  ← default if you press enter
   • `force skip`  — pretend Stages 1-3 are done, iterate on the default decide()
 ```
 
@@ -119,7 +119,7 @@ Need a baseline score before iterating. Pick one:
 
 Most users pick `500` here — the HL loop runs many short matches.
 
-Pick: `500` / `5000`.
+Pick: `500` / `5000`.  (or `go` / enter → defaults to `500`)
 ```
 
 On the user's pick, run `./pokerkit run` with the right competition
@@ -134,6 +134,18 @@ On terminal state:
 - Mark whichever stage row matches the user's actual setup
   (Branch A → Stage 3 row; Branch B → Stage 1 row; Branch C → Stage 1
   row with the textured baseline).
+
+**3-question feedback at this Stage transition (first Arena baseline):**
+
+```
+✓ What just happened: baseline Arena run → {bb_per_100} ± {CI} bb/100
+  ({hands} hands vs reference panel).
+✓ Why this matters: this is the anchor every HL iteration measures
+  against. We need a number BEFORE we can patch — there's nothing to
+  improve on otherwise.
+✓ What's next: HL loop — read failure_report.txt, propose ONE patch,
+  re-run. Repeat until plateau. ~10 min per round.
+```
 
 Then enter the Stage 4 loop.
 
@@ -165,16 +177,27 @@ later iterations, pop `beat_baseline` / `positive_vs_panel` /
 Three options at every iteration boundary, never more:
 
 ```
-  • `go`        — one more iteration
+  • `go`        — one more iteration  ← default if you press enter
   • `show me`   — read failure_report.txt + the proposed patch
   • `stop`      — lock in current score
 ```
 
+**3-question feedback after each iteration:**
+
+```
+✓ What just happened: round {n} patched {pattern} → {prev} → {curr}
+  bb/100 ({delta:+}).
+✓ Why this matters: {real lift if >+2; noise within ±20 CI if
+  |delta|<5; regression if negative}.
+✓ What's next: read failure_report.txt, propose next patch, re-run.
+  ~10 min. Or `stop` to lock in.
+```
+
 Apply plateau / band-climb / overdue-climb rules from SKILL.md
 Step 6. When plateau hits (last 2 deltas < +2 bb/100), offer the
-standard 2-option Arena picker (`500` / `5000`) — most users have
-been on 500 the whole loop and want a 5000-hand run to lock in their
-definitive number.
+standard 2-option Arena picker (`500` / `5000` — default `500` on
+enter) — most users have been on 500 the whole loop and want a
+5000-hand run to lock in their definitive number.
 
 ---
 

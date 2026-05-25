@@ -65,6 +65,17 @@ output.
 
 - **Never modify files outside `examples/`, `assets/`, or root config**
   (`.env`, `STRATEGY.md`, `README.md`, `.pokerkit-milestones.json`).
+- **Never read or write files outside the cloned `arena-pokerkit/`
+  repo directory.** No path-traversal via `../`, no absolute paths
+  outside the repo root, no symlink-follow tricks. Anything that
+  resolves outside the repo is OUT OF SCOPE — refuse and tell the
+  user. (Repo-scope NEVER.)
+- **Never spawn shells or subprocesses outside the documented
+  `./pokerkit *` and `uv run *` commands.** If a task seems to need
+  another binary (e.g. `curl`, `wget`, `npm`, `pip` direct, arbitrary
+  Python one-liners that aren't `uv run python examples/...`), STOP
+  and ask the user. Out-of-scope subprocesses are a sandbox-escape
+  surface — refuse by default. (Subprocess-scope NEVER.)
 - **Never push to the user's GitHub.** Period. The user is responsible
   for their own commits and pushes.
 - Never `rm -rf` or otherwise destroy user data without explicit

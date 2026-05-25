@@ -121,8 +121,10 @@ Show the user the actual data files:
   decide() patched to consult research before pure-style decisions.
 ```
 
-Run local validation. Then offer the **standard 2-option Arena
-picker** (identical wording across all paths):
+Run local validation (`./pokerkit test` + `./pokerkit selfplay`) in
+**parallel / background** — surface results as one-liners (don't
+block on them). Then offer the **standard 2-option Arena picker**
+(identical wording across all paths):
 
 ```
 🎯 Ready for Arena?
@@ -140,7 +142,7 @@ You can pick either:
 Most users do 500-hand a few times during HL loop, then one 5000-hand
 when they've plateaued and want the locked-in number.
 
-Pick: `500` / `5000`.   (or `show me` to list what's in research/ first)
+Pick: `500` / `5000`.   (or `go` / enter → defaults to `500`; `show me` to list research/ first)
 ```
 
 On the user's pick, run `./pokerkit run` with the right competition
@@ -192,9 +194,20 @@ test → analyze → patch → re-run → plateau check.
 Three options at every iteration boundary:
 
 ```
-  • `go`        — one more iteration
+  • `go`        — one more iteration  ← default if you press enter
   • `show me`   — read failure_report.txt + the proposed patch
   • `stop`      — lock in current score
+```
+
+**3-question feedback after each iteration:**
+
+```
+✓ What just happened: round {n} patched {pattern} → {prev} → {curr}
+  bb/100 ({delta:+}).
+✓ Why this matters: {real lift / noise / regression — see 4-stage
+  anchor + ±CI band}.
+✓ What's next: read failure_report.txt, propose next patch, re-run.
+  Or `stop` to lock in.
 ```
 
 After iteration 1, unlock stage milestone `curriculum_running`. After

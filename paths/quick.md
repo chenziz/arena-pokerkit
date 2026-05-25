@@ -85,16 +85,38 @@ uv sync
 cp .env.example .env             # if read-only sandbox, skip this and
                                   # export ARENA_API_BASE + ARENA_COMPETITION_ID
                                   # directly (see references/permissions.md)
-./pokerkit selfplay --hands 200 --seed 42   # local baseline number
-# OR equivalent (sandbox-friendly):
-# uv run python examples/selfplay.py --hands 200 --seed 42
 ```
 
-When complete, print one line:
+**Parallel tests** — kick off `./pokerkit test` and
+`./pokerkit selfplay --hands 200 --seed 42` in the **background** while
+you continue narrating. Do NOT block on them. Surface their results as
+they complete:
+
+```
+🎯 Tests passed: 34/34   (background)
+🎯 Selfplay baseline: +14.2 bb/100 vs tight-passive   (background)
+```
+
+If a test fails, surface the failure out-of-band and stop the flow until
+it passes. Otherwise, narration continues immediately.
+
+When the selfplay result arrives, print one line:
 
 ```
 Repo ready. Baseline against local bots: {baseline_local} bb/100.
 (That's vs simple local opponents — Arena's reference panel is way stronger.)
+```
+
+**3-question feedback at this Stage transition:**
+
+```
+✓ What just happened: cloned repo, installed deps, baseline +{N} bb/100
+  vs local bots (background tests passed {M}/{M}).
+✓ Why this matters: proves your environment works and `decide()` returns
+  legal actions. Does NOT tell you Arena performance — local bots are
+  much weaker than the reference panel.
+✓ What's next: Stage 1 (Style) — I pick tight-aggressive default and
+  copy it into examples/agent.py. ~30 sec, no Arena yet.
 ```
 
 Local baseline number from `selfplay` goes into the iteration history
@@ -144,7 +166,7 @@ You can pick either:
 Most users do 500-hand a few times during HL loop, then one 5000-hand
 when they've plateaued and want the locked-in number.
 
-Pick: `500` / `5000`.
+Pick: `500` / `5000`.  (or just `go` / enter → defaults to `500`)
 ```
 
 On the user's pick, run `./pokerkit run` with the right competition
@@ -159,14 +181,25 @@ On terminal state:
 3. Unlock the stage milestone `style_picked` and print the stage pop.
 4. Surface the score using the **4-stage anchor table** from SKILL.md
    "Score interpretation" — mark Stage 1 with "← you ran this".
-5. ASK:
+5. **3-question feedback at this Stage transition:**
 
 ```
-That's your Stage 1 score. Next: Stage 2 (Strategy.md) — I write a
-real strategy file with ranges, sizing, adaptation rules. decide()
-will read it before every action. Expected lift: ~10 bb/100.
+✓ What just happened: Stage 1 (TAG style) on Arena → {bb_per_100} ± {CI}
+  bb/100 over {hands} hands vs the reference panel.
+✓ Why this matters: this is your honest baseline against the panel —
+  any future improvement is measured against this number, not local
+  selfplay.
+✓ What's next: Stage 2 (Strategy.md) writes a real strategy spec
+  (ranges + sizing + adaptation), then re-runs Arena. Expected lift:
+  ~10 bb/100. ~5 min to write + ~15 min Arena.
+```
 
-  • `go`        — write Strategy.md and run Stage 2
+6. ASK:
+
+```
+Ready for Stage 2?
+
+  • `go`        — write Strategy.md and run Stage 2  ← default if you just press enter
   • `show me`   — show the planned Strategy.md outline before writing
   • `stop`      — lock in Stage 1 result for today
 ```
@@ -212,7 +245,8 @@ Then show the user a snippet of the actual file:
 ```
 
 Run local validation — and **surface the results to the user**.
-Both modes, both visible:
+Both modes, both visible. **Kick these off in parallel / background**
+so the user keeps reading narration instead of waiting:
 
 ```bash
 ./pokerkit test                          # 20 unit scenarios (21 pytest tests)
@@ -265,6 +299,18 @@ an Arena run — Arena is now gated behind Stage 3.)
 
 ### Anticipation tease — Stage 3, NOT Arena
 
+**3-question feedback at this Stage transition:**
+
+```
+✓ What just happened: STRATEGY.md written, decide() re-translated from
+  it, local tests {M}/{M} pass, local selfplay +{N} bb/100.
+✓ Why this matters: your bot now plays a coherent strategy. But local
+  bots are weak — Arena's reference panel would still score this
+  around -25 to -15 bb/100. Stage 3 closes that gap with real data.
+✓ What's next: Stage 3 (Auto Research) — pull GTO charts + board
+  textures + opponent HUD, bake into decide(). ~5 min, no Arena yet.
+```
+
 Then ASK (note: **no Arena option here**):
 
 ```
@@ -278,7 +324,7 @@ Then ASK (note: **no Arena option here**):
    I bake these into decide() so your bot looks up data before
    making decisions, not just relies on your strategy preamble.
 
-  • `go`         — start Stage 3 (Auto Research)
+  • `go`         — start Stage 3 (Auto Research)  ← default if you press enter
   • `show me`    — open STRATEGY.md and walk through it first
   • `tweak it`   — tell me what to change in STRATEGY.md before Stage 3
 ```
@@ -369,7 +415,7 @@ You can pick either:
 Most users do 500-hand a few times during HL loop, then one 5000-hand
 when they've plateaued and want the locked-in number.
 
-Pick: `500` / `5000`.
+Pick: `500` / `5000`.  (or just `go` / enter → defaults to `500`)
 ```
 
 On the user's pick, run `./pokerkit run` with the right competition
@@ -380,7 +426,20 @@ On terminal state:
 - Surface score with 4-stage anchor table, mark Stage 3 row with
   "← you ran this".
 - If `positive_vs_panel` triggers, also pop that marker.
-- ASK approval to proceed to Stage 4.
+- **3-question feedback at this Stage transition:**
+
+```
+✓ What just happened: Stage 3 with GTO + textures + HUD baked in →
+  {bb_per_100} ± {CI} bb/100 ({delta} vs Stage {prev}).
+✓ Why this matters: your bot now consults data, not just style. This
+  is the typical "good amateur" plateau — most strategies max out
+  here unless they adapt to specific panel patterns.
+✓ What's next: Stage 4 (Curriculum / HL loop) — read failure_report,
+  patch one leak per round, re-run. Typical lift: +5-15 bb/100 over
+  4-6 iterations. ~10 min per loop.
+```
+
+- ASK approval to proceed to Stage 4 (default = `go` on enter).
 
 ---
 
@@ -442,14 +501,26 @@ After each subsequent iteration:
 Three options at every iteration boundary, never more:
 
 ```
-  • `go`        — one more iteration
+  • `go`        — one more iteration  ← default if you press enter
   • `show me`   — read failure_report.txt myself
   • `stop`      — lock in current score
 ```
 
+**3-question feedback after each iteration:**
+
+```
+✓ What just happened: round {n} patched {pattern} → {prev} → {curr}
+  bb/100 ({delta:+}).
+✓ Why this matters: {delta_explanation — "real lift" if >+2,
+  "noise within CI ±20" if |delta|<5 on 500-hand, "regression — will
+  revert if next round confirms" if negative}.
+✓ What's next: read failure_report.txt for next leak, propose patch,
+  re-run 500-hand. ~10 min. Or `stop` to lock in this score.
+```
+
 When plateau hits, offer the 2-option Arena picker again (`500` /
-`5000`) — most users have been on 500 the whole loop and want a
-5000-hand run to lock in their definitive number.
+`5000` — default `500` on enter) — most users have been on 500 the
+whole loop and want a 5000-hand run to lock in their definitive number.
 
 ---
 

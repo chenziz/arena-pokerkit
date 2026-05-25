@@ -1,6 +1,6 @@
 ---
 name: arena-pokerkit
-version: 0.15.0
+version: 0.16.0
 description: Use this skill whenever the user wants to build, improve, register, or submit a poker bot to dev.fun Arena's Poker Eval benchmark. Trigger on "build a poker bot", "join poker eval", "improve my arena agent", "submit poker bot", "arena starter kit", "pokerkit", or any mention of the poker-eval arena. Handles cloning, installation, strategy elicitation, decide() editing, local self-play validation, Arena evaluation, replay analysis, and submission end-to-end. Asks the user only for strategy taste and submission approval; runs all build/test/run commands autonomously.
 license: MIT
 ---
@@ -123,21 +123,26 @@ Arena's **Researcher Track** to compete alongside agent-AI researchers.
 
 **Poker Eval** is the training arena. No prize, no stakes — it's
 where you build, iterate, and battle-test your bot against the same
-reference panel you'll see in the tournament. When Poker Arena opens,
-you plug in the bot you tuned here and play for the pool.
+reference panel you'll see in the tournament.
 
-Today's task: climb the Poker Eval leaderboard.
+**Building a poker bot has 4 stages.** Each stage produces an
+artifact you own and a visible score lift:
 
-Most LLM-only bots lose **~30 bb/100** to the reference panel. Top
-human-designed bots lose **~3**. **The gap is the game** — close it.
+| Stage | What you build | Artifact | bb/100 |
+|---|---|---|---|
+| **1. Style** | Minimum bot, pick a TAG/LAG/balanced style | style label saved | -30 ~ -20 |
+| **2. Strategy.md** | Real ranges, sizing, adaptation rules | `STRATEGY.md` (yours to edit) | -25 ~ -10 |
+| **3. Auto Research** | GTO charts + opponent HUD baked into decide() | `research/*.json` data files | -10 ~ -3 |
+| **4. Curriculum** | Run → analyze failures → patch → repeat | `failure_report.txt` + decide() diffs | -3 ~ +5 |
 
-You don't need to be a poker player or an ML engineer. **~1 hour +
-willingness to iterate** is enough.
+Most users walk through 1 → 2 → 3 → 4 in ~1 hour. All free.
 
 **Pick your path:**
-  • `quick`        — I build you a solid baseline bot, no questions. First Arena score in ~10 min. (Recommended for first run.)
-  • `guided`       — You pick a playing style, I explain as we go.
-  • `tell me more` — Walk me through scoring, bb/100, the panel first.
+  • `quick`              — I drive all 4 stages, you approve at boundaries (~1 hr)
+  • `guided`             — Same 4 stages, you participate actively (pick style, edit Strategy.md, choose research)
+  • `learn`              — Explain Arena scoring + how the bot works first
+  • `skip to research`   — You already have a style + strategy, jump to Stage 3
+  • `skip to HL loop`    — You already have a working bot, jump to Stage 4 (curriculum)
 
 Type one. Let's go.
 ```
@@ -158,12 +163,14 @@ start narrating Phase 1.
 | `quick` / `q` / `go` / `default` / English/Chinese affirmative with no other content | `paths/quick.md` |
 | `guided` / `g` / `walk me through` / `teach me` | `paths/guided.md` |
 | `tell me more` / `learn` / `explain` / `详细` / `more` / `info` | `paths/learn.md` |
-| `show levels` / `advanced` / `levels` | Surface `references/optimization-levels.md` ladder table, then re-prompt with the three paths above |
+| `skip to research` / `skip research` / `i have a strategy` / `jump to stage 3` | `paths/skip-research.md` |
+| `skip to HL loop` / `skip to curriculum` / `i have a bot` / `jump to stage 4` | `paths/skip-hl.md` |
+| `show levels` / `advanced` / `levels` | Surface `references/optimization-levels.md` ladder table, then re-prompt with the paths above |
 | Explicit task ("build me a tight-aggressive bot and submit") | Skip the greeting, jump to Step 0 with their constraint as the strategy answer |
 
-`paths/{quick,guided,learn}.md` are subordinate scripts — they reuse
-the Steps 0-6 below but pace and disclose differently. Read the
-matching path file in full before executing.
+`paths/{quick,guided,learn,skip-research,skip-hl}.md` are subordinate
+scripts — they reuse the Steps 0-6 below but pace and disclose
+differently. Read the matching path file in full before executing.
 
 ### Progressive disclosure rule (applies on every path)
 
@@ -213,17 +220,20 @@ Internally the Steps 0-6 below still drive structure, but say
 
 ---
 
-## Milestones (10 named, with progress bar)
+## Milestones (4 stage milestones + within-stage markers)
 
-The kit gamifies the dev loop with **10 named milestones**. They're
-persisted in `.pokerkit-milestones.json` at the repo root (flat file
-next to `.arena-credentials`, NOT a directory). Schema:
+The kit gamifies the dev loop with **4 stage milestones** anchored to
+the 4-stage progression (Style / Strategy / Research / Curriculum)
+plus 4 within-stage progress markers (First Arena Score / Beat
+Baseline / Positive vs Panel / Plateau Broken). All persisted in
+`.pokerkit-milestones.json` at the repo root (flat file next to
+`.arena-credentials`, NOT a directory). Schema:
 
 ```json
 {
-  "kit_connected": "2026-05-25T14:03:12Z",
-  "first_hand_played": "2026-05-25T14:03:14Z",
-  "style_chosen": "2026-05-25T14:03:14Z"
+  "style_picked": "2026-05-25T14:03:12Z",
+  "strategy_written": "2026-05-25T14:05:14Z",
+  "first_arena_score": "2026-05-25T14:12:14Z"
 }
 ```
 
@@ -231,53 +241,61 @@ On agent start, read the file (if it exists). On any milestone
 unlock, write the new key with the current ISO timestamp. **Atomic
 writes**: write to `.pokerkit-milestones.json.tmp` then `os.rename`.
 
-### The 10 milestones (ordered)
+### The 4 stage milestones (ordered)
 
-| # | id | Unlocks when |
+| Stage | id | Pretty name | Unlocks when |
+|---|---|---|---|
+| Stage 1 | `style_picked` | Style Picked | A style (TAG/LAG/balanced/custom) is selected — guided ASKs, quick auto-defaults — and the style label is saved |
+| Stage 2 | `strategy_written` | Strategy Written | `STRATEGY.md` exists in repo root with real ranges + sizing + adaptation rules; `decide()` reads it before each action |
+| Stage 3 | `research_wired` | Research Wired | At least one research data source baked in (`research/preflop.json`, board-texture buckets, or `/texas/agent-stats` hook); `decide()` consults it before pure-style decisions |
+| Stage 4 | `curriculum_running` | Curriculum Running | First HL loop iteration completed: `failure_report.txt` generated + at least one `decide()` patch applied + re-run logged in `.arena-poker-state['iterations']` |
+
+### Within-stage progress markers (kept from prior versions)
+
+| id | Pretty name | Unlocks when |
 |---|---|---|
-| 1 | `kit_connected` | repo cloned + `uv sync` succeeded |
-| 2 | `first_hand_played` | first legal decision returned by `decide()` (selfplay or Arena, whichever happens first) |
-| 3 | `style_chosen` | user picked a style (guided) OR auto-default applied (quick) |
-| 4 | `local_eval_green` | `./pokerkit test` + `./pokerkit selfplay --hands 200` both pass |
-| 5 | `first_arena_score` | ★ first Arena S5 terminal state — the magic moment, must hit <10 min on `quick` |
-| 6 | `beat_baseline` | Arena bb/100 beat the local baseline call-station / random reference |
-| 7 | `positive_vs_panel` | Arena bb/100 ≥ 0 — non-losing result vs the reference panel |
-| 8 | `plateau_broken` | improved >5 bb/100 over best previous Arena score |
-| 9 | `submitted_to_poker_eval` | uploaded final bot to S6 (championship ranking) — note: this is the Eval submission, NOT Poker Arena. Poker Arena's real-prize submission flow does not exist yet (tournament not open) |
-| 10 | `leaderboard_listed` | confirmed visible on public Poker Eval daily leaderboard |
+| `first_arena_score` | First Arena Score | ★ first Arena S5 terminal state — the magic moment; usually fires inside Stage 1 or Stage 2 |
+| `beat_baseline` | Beat Baseline | Arena bb/100 beat the local baseline call-station / random reference |
+| `positive_vs_panel` | Positive bb/100 vs Panel | Arena bb/100 ≥ 0 — non-losing result vs the reference panel |
+| `plateau_broken` | Plateau Broken | improved >5 bb/100 over best previous Arena score (fires inside Stage 4) |
 
-Milestone 9 used to be called "Submission Locked" in earlier drafts —
-that was wrong, there's no prize on Poker Eval to "lock". The actual
-prize submission lives in **Poker Arena**, which is not yet open. We
-say "Submitted to Poker Eval" instead.
+Stage milestones and within-stage markers are independent. A user on
+the `quick` path will typically unlock: Style Picked → First Arena
+Score → Strategy Written → Beat Baseline → Research Wired → Positive
+vs Panel → Curriculum Running → Plateau Broken.
 
 ### Surfacing
 
-On every milestone unlock, print this pop:
+On every **stage milestone** unlock, print this pop with a 4-cell
+stage bar:
 
 ```
-🎯 Milestone unlocked — {Pretty Name} ({n}/10)
-Progress: ███░░░░░░░  {n}/10  ·  Next: {next pretty name}
+🎯 Stage {n} unlocked — {Pretty Name} ({n}/4 stages)
+Progress: █░░░  Stage {n} / 4  ·  Next: {next stage pretty name}
 ```
 
-The progress bar is 10 cells: filled = `█`, empty = `░`. Don't
-print the bar on every narration line — only on milestone unlock and
-at the end of major Phases.
+On every **within-stage marker** unlock, print this pop with no stage
+bar (markers fire opportunistically):
+
+```
+🎯 Milestone unlocked — {Pretty Name}
+```
+
+Don't print the bar on every narration line — only on stage milestone
+unlock and at the end of major Phases.
 
 ### Pretty-name map
 
-| id | pretty name |
-|---|---|
-| kit_connected | Kit Connected |
-| first_hand_played | First Hand Played |
-| style_chosen | Style Chosen |
-| local_eval_green | Local Eval Green |
-| first_arena_score | First Arena Score |
-| beat_baseline | Beat Baseline |
-| positive_vs_panel | Positive bb/100 vs Panel |
-| plateau_broken | Plateau Broken |
-| submitted_to_poker_eval | Submitted to Poker Eval |
-| leaderboard_listed | Leaderboard Listed |
+| id | pretty name | type |
+|---|---|---|
+| style_picked | Style Picked | stage 1 |
+| strategy_written | Strategy Written | stage 2 |
+| research_wired | Research Wired | stage 3 |
+| curriculum_running | Curriculum Running | stage 4 |
+| first_arena_score | First Arena Score | marker |
+| beat_baseline | Beat Baseline | marker |
+| positive_vs_panel | Positive bb/100 vs Panel | marker |
+| plateau_broken | Plateau Broken | marker |
 
 ### `.gitignore`
 
@@ -493,13 +511,43 @@ if not done, then L5/L6) — never just "iterate again forever".
 
 ## Score interpretation (use whenever surfacing an Arena bb/100)
 
-When reporting an Arena score, **always include these 4 lines**:
+**Iron rule: every Arena score render MUST include the 4-stage anchor
+table.** No isolated numbers. No bare bb/100 figure without the
+anchor table around it. Always frame as "you are at Stage N, score Y,
+next stage targets Z."
+
+### The 4-stage anchor table (paste this every time)
+
+```
+📊 Your Stage {N} score: {bb_per_100} ± {CI} bb/100  ({season}, {hands} hands)
+
+  random bot:         ~-200
+  Stage 1 (style):    ~-25
+  Stage 2 (strategy): ~-15
+  Stage 3 (research): ~-5
+  Stage 4 (curriculum): ~+3
+  Top bots:           ~+10
+
+You are at Stage {N} ({stage_name}). Score {bb_per_100}.
+→ Next stage target: ~{next_anchor} bb/100.
+```
+
+Substitute `{N}`, `{stage_name}`, `{bb_per_100}`, `{CI}`, `{season}`,
+`{hands}` from the user's actual run + their current stage in
+`.pokerkit-milestones.json`. Mark "← you ran this" on the row for the
+user's current stage so they see where they sit. The `{next_anchor}`
+is the next-stage row from the table; if the user is at Stage 4,
+point at Top Bots instead.
+
+### Plus the 4-line CI explainer (first Arena run only)
+
+On the FIRST Arena run, also include these 4 lines under the table:
 
 1. **Raw score**: `{bb/100} ± {CI_for_season} bb/100` over `{N}` hands ({season name}).
    For S5 (500h): CI ≈ ±20. For S6 (5000h): CI ≈ ±6. Wide because
    scoring is raw bb/100 with no variance adjustment (yet).
 2. **What it means**: bb/100 = big blinds win/lose per 100 hands.
-   Negative = losing money. Anchor: random-bot ≈ -200, solver-bot ≈ +5 to +15.
+   Negative = losing money.
 3. **Why local ≠ Arena**: Local selfplay uses simple bots. Arena uses
    the reference panel — way stronger. Compare DELTAS between Arena runs, not
    absolute numbers.
@@ -510,9 +558,14 @@ When reporting an Arena score, **always include these 4 lines**:
    V3 AIVAT, which will tighten these CIs 3-10× at the same hand
    count, but neither has shipped yet.
 
+Subsequent Arena runs use the anchor table + a 1-line trajectory
+(`{prev_score} → {current_score} bb/100 ({+/-}{delta})`), no CI
+explainer repeated.
+
 If the score is negative, **don't frame it as failure**: "Negative
-score is normal vs the reference panel. The Heuristic Learning loop's job is to
-find the patterns that lose chips and patch them."
+score is normal vs the reference panel until you reach Stage 4. The
+curriculum loop's job is to find the patterns that lose chips and
+patch them."
 
 ---
 

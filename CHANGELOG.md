@@ -2,6 +2,108 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.16.0] — 2026-05-25 — "4 Stages + Skip Ahead — progressive learning restored, 3 paths kept"
+
+Real dogfood feedback drove this redesign. v0.15 had a friendly 3-path
+entry (`quick` / `guided` / `learn`) but the substance was opaque:
+on `quick` the user saw silent ✓ ✓ ✓ checkmarks and a fake -8.7 score
+that claimed to beat top bots — no visible artifacts in the repo, no
+real Arena run. Bad.
+
+v0.16 keeps v0.15's 3-path entry (it's friendly) but rebuilds the
+substance by **restoring the 4-stage progressive learning** from
+v0.7/v0.8 — each path now walks the user through 4 progressive stages,
+each producing a visible artifact the user owns:
+
+| Stage | What | Artifact | Realistic bb/100 |
+|---|---|---|---|
+| 1. Style | Minimum bot, pick TAG/LAG/balanced | style label saved | -30 ~ -20 |
+| 2. Strategy.md | Real ranges + sizing + adaptation | `STRATEGY.md` (yours to edit) | -25 ~ -10 |
+| 3. Auto Research | GTO + texture + HUD baked in | `research/*.json` data files | -10 ~ -3 |
+| 4. Curriculum (HL) | Iterate: run → analyze → patch | `failure_report.txt` + decide() diffs | -3 ~ +5 |
+
+### Added — 4-stage progression model
+
+- **`SKILL.md` greeting** rewritten to include the 4-stage table
+  inline. Users see what they're committing to before picking a path.
+- **`paths/quick.md`** rewritten — drives through Stage 1 → 2 → 3 → 4,
+  showing the artifact at each stage and ASKing `go / show me / stop`
+  before the next stage. No more silent ✓ ✓ ✓ checkmarks.
+- **`paths/guided.md`** rewritten — same 4 stages, user participates
+  actively (picks style from 3 options, can edit STRATEGY.md inline,
+  picks which research sources to pull).
+- **`paths/learn.md`** rewritten to explain the 4-stage model + Arena
+  scoring + reference panel before any code commit.
+
+### Added — skip-ahead paths for experienced users
+
+- **`paths/skip-research.md`** — NEW. Loaded on `skip to research` /
+  `i have a strategy`. Assumes Stages 1 + 2 done, jumps to Stage 3.
+  Verifies state (`agent.py`, `STRATEGY.md`) before jumping.
+- **`paths/skip-hl.md`** — NEW. Loaded on `skip to HL loop` /
+  `i have a bot`. Assumes Stages 1 + 2 + 3 done, jumps to Stage 4
+  (curriculum). Establishes a baseline Arena score before iteration
+  loop if not on record.
+
+### Changed — milestones from 10 generic to 4 stage milestones + 4 markers
+
+- **4 stage milestones** (ordered): `style_picked`, `strategy_written`,
+  `research_wired`, `curriculum_running`. Each pops with a stage bar:
+  `Progress: █░░░ Stage N / 4`.
+- **4 within-stage progress markers** (opportunistic): `first_arena_score`,
+  `beat_baseline`, `positive_vs_panel`, `plateau_broken`. Pop with no
+  stage bar.
+- Removed `kit_connected`, `first_hand_played`, `style_chosen` (folded
+  into stage milestones), `local_eval_green`, `submitted_to_poker_eval`,
+  `leaderboard_listed` (no longer central to the dev loop UX).
+
+### Changed — score interpretation requires 4-stage anchor table
+
+- **Iron rule**: every Arena score render MUST include the 4-stage
+  anchor table (random / Stage 1-4 anchors / Top Bots) with "← you ran
+  this" on the user's current stage row and an explicit `→ Next stage
+  target: ~{N} bb/100` line.
+- No more isolated numbers like "you're at -8.7". Always framed as
+  "you are at Stage N, score Y, next stage targets Z."
+- The 4-line CI explainer (raw / what it means / why local ≠ Arena /
+  what ±CI means) is kept for the FIRST Arena run only. Subsequent
+  runs use the anchor table + a 1-line trajectory.
+
+### Added — stages-to-levels callout
+
+- **`references/optimization-levels.md`** now opens with a
+  Stages → Levels map: Stage 1+2 = Level 1+2 (ladder), Stage 3 = Level
+  3, Stage 4 = Level 4 (HL loop). Levels 5 / 6 (paid LLM-in-loop /
+  trained weights) live on top of Stage 4 and require explicit
+  opt-in. The 6-level ladder is retained for legacy reference.
+
+### Removed — fake score claims
+
+- No more "-8.7 / beats top bots" anywhere in the kit copy. All score
+  framing now anchors against the realistic 4-stage table; no Arena
+  number is reported without a real `./pokerkit run` behind it.
+
+### Verified
+
+- 21/21 pytest tests pass.
+- `./pokerkit version` reports `0.16.0`.
+- `ls paths/` → quick.md, guided.md, learn.md, skip-research.md,
+  skip-hl.md (5 files).
+- `grep "Stage 1" SKILL.md` → ≥ 3 hits (greeting table, score
+  interpretation, milestone list).
+- `grep -i "4 stage" SKILL.md` → ≥ 2 hits.
+- `grep "-8.7\|top bots.*-3" SKILL.md paths/` → 0 hits.
+
+### Migration
+
+No code-behavior changes. Existing CLI commands work identically. The
+`.pokerkit-milestones.json` schema gains the new stage keys
+(`style_picked`, `strategy_written`, `research_wired`,
+`curriculum_running`); old keys (`kit_connected`, `first_hand_played`,
+etc.) are silently ignored. A user upgrading mid-run won't see retro
+unlocks for already-completed stages — that's fine, milestones are
+forward-only.
+
 ## [0.15.0] — 2026-05-25 — "Arena Starter Kit — gamified onboarding, 3 paths, milestone tracking"
 
 Real dogfood feedback drove a major UX redesign of first-contact.

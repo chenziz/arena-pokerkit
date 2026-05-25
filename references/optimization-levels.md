@@ -1,9 +1,28 @@
 # Optimization Levels — climb the ladder
 
+> **Stages → Levels map (v0.16+)**. The user-facing default flow is
+> the **4-stage progression** (Style → Strategy.md → Auto Research →
+> Curriculum). Those map directly to the bottom of this ladder:
+>
+> | Stage | Level(s) |
+> |---|---|
+> | Stage 1 — Style | Level 1 (Baseline) |
+> | Stage 2 — Strategy.md | Level 2 (Strategy-Guided) |
+> | Stage 3 — Auto Research | Level 3 (Auto Research) |
+> | Stage 4 — Curriculum / HL loop | Level 4 (Heuristic Learning loop) |
+>
+> Levels 5 (LLM-in-loop, paid) and Level 6 (Trained weights, expert)
+> live **on top of Stage 4**, not as part of the 4-stage default.
+> They require explicit user opt-in.
+>
+> The 6-level ladder below is retained for legacy reference + for
+> users who want to plan ambition past Stage 4. New flows should
+> talk to users in terms of Stages, not Levels, until they ask.
+
 The bot you build with this skill isn't one bot — it's a **ladder of
 six progressively stronger bots**, each building on the previous.
-Pick how far you want to climb. Most users stop at Level 3-4. The
-top of the leaderboard usually lives at Level 5-6.
+Pick how far you want to climb. Most users stop at Level 3-4 (Stage
+3-4). The top of the leaderboard usually lives at Level 5-6.
 
 Each level has: an expected bb/100 vs the reference panel,
 the time cost to reach it, and what code changes it adds.

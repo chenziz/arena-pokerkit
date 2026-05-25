@@ -135,30 +135,94 @@ Then show the user a snippet of the actual file:
   decide() now reads STRATEGY.md before every action.
 ```
 
-Run local validation:
+Run local validation — and **surface the results to the user**.
+Both modes, both visible:
 
 ```bash
-./pokerkit test
-./pokerkit selfplay --hands 200 --seed 42
+./pokerkit test                          # 21 fixed scenario fixtures
+./pokerkit selfplay --hands 200 --seed 42  # 200-hand match vs simple bot
 ```
 
-Both must pass. Then ASK:
+Capture the actual output from each command. Then print a unified
+results block in this shape (use real numbers from the run; the
+examples here are illustrative):
 
 ```
-Strategy.md is wired in. Want to run Arena S5 to measure Stage 2?
-(~15 min, real reference panel)
+🧪 Local test — fixed scenarios:
+   PASS  AKs UTG → bot raises ✓
+   PASS  72o BB vs MP open → bot folds ✓
+   PASS  AA on dry flop → bot bets ✓
+   ...
+   21 / 21 passed (your bot makes the "obvious right play" in all
+   canonical spots)
 
-  • `go`        — run Arena Stage 2
-  • `show me`   — open STRATEGY.md and walk through it first
-  • `tweak it`  — tell me what to change before running
+🎯 Local self-play — 200 hands vs tight-passive bot:
+   Win rate:  68% (137 / 200 hands won net)
+   bb/100:    +14.8 bb/100  ← positive locally
+   speed:     0.6 sec total
 ```
 
-On `go`, `./pokerkit run`. On terminal state:
-- Unlock stage milestone `strategy_written` and print stage pop.
-- Surface score with 4-stage anchor table, mark Stage 2 row with
-  "← you ran this".
-- If `beat_baseline` triggers, also pop that marker.
-- ASK approval to proceed to Stage 3.
+If `pokerkit test` exits non-zero or any scenario fails, surface the
+failures and stop the flow — do not offer the next stage until tests
+pass.
+
+### Honest reflection — local ≠ Arena
+
+Immediately after the results block, print this reflection. It is
+**mandatory** — do not skip to Stage 3 without showing it:
+
+```
+✓ Your bot plays the strategy you wrote. Local results are positive —
+  but the local opponent is a simple tight-passive bot.
+
+  Arena's reference panel is much stronger (DeepCFR-style trained
+  agents). The same Strategy MD against the panel would likely score
+  around -25 to -15 bb/100 — that's the typical Stage 2 anchor.
+
+  Before going to Arena, let's give your bot more knowledge — that's
+  what Stage 3 (Auto Research) and Stage 4 (Curriculum) add.
+```
+
+Unlock stage milestone `strategy_written` and print stage pop here.
+(Stage 2's milestone fires on the local validation passing, not on
+an Arena run — Arena is now gated behind Stage 3.)
+
+### Anticipation tease — Stage 3, NOT Arena
+
+Then ASK (note: **no Arena option here**):
+
+```
+🔓 Stage 3 — Auto Research
+
+   Your STRATEGY.md is "opinions on paper". Stage 3 adds DATA:
+     • Preflop GTO ranges (e.g. Upswing 6-max chart)
+     • Board texture buckets (dry/wet/paired sizing tables)
+     • Opponent HUD (their VPIP / aggression — pulled live)
+
+   I bake these into decide() so your bot looks up data before
+   making decisions, not just relies on your strategy preamble.
+
+  • `go`         — start Stage 3 (Auto Research)
+  • `show me`    — open STRATEGY.md and walk through it first
+  • `tweak it`   — tell me what to change in STRATEGY.md before Stage 3
+```
+
+If the user insists on running Arena before Stage 3 (e.g. "run arena
+anyway", "skip to arena"), you may run `./pokerkit run` — but only
+after warning once:
+
+```
+You can run Arena now, but Stage 2 bots typically score -25 to -15
+bb/100 against the reference panel. Stage 3 + Stage 4 are where the
+real climb happens. Sure you want to spend ~15 min on a Stage 2
+measurement?
+
+  • `yes`     — run Arena anyway
+  • `no`      — proceed to Stage 3 instead
+```
+
+Only on explicit `yes` after that warning do you run Arena from
+Stage 2.
 
 ---
 

@@ -56,6 +56,210 @@ Repo ready. Baseline against local bots: {baseline_local} bb/100.
 
 ## Stage 1 — Style (ASK)
 
+> **Profiling first.** Before picking (a)/(b)/(c), walk the user through
+> **4 quick decision spots (Q1-Q4)**. Each has a "real" EV (pre-computed
+> via Monte Carlo over realistic opponent ranges) so the user *learns*
+> from their answer — not just vibes. After each pick, show the EV
+> feedback block. Then summarize their profile into one of the 3 styles.
+
+### Q1 — Preflop open: QJo from MP, folds around
+
+```
+🃏 Q1 / 4
+
+  100bb effective. 6-max. Folds to you in MP with QJo (queen-jack offsuit).
+  Action's on you.
+
+    (1) raise  (open 2.5bb)
+    (2) call   (limp 1bb)
+    (3) fold
+
+  Type 1, 2, or 3.
+```
+
+**After user picks (show this block):**
+
+```
+✓ Your choice: **{user_pick}**
+
+Other options' EV (Monte Carlo, 2000 iters vs modern 6-max ranges):
+
+| Option   | EV         | Reason                                                                |
+|---       |---         |---                                                                    |
+| `raise`  | +0.66 BB ★ | Captures fold equity vs SB+BB (~55% combined fold), plays strong-range pot when called |
+| `call`   | -0.25 BB   | Limping invites multiway, gives up initiative — modern 6-max nobody limps MP |
+| `fold`   |  0.00 BB   | Safe but leaves money on the table — QJo is a clear open from MP     |
+```
+
+**Why the ★ play is best:** QJo from MP has enough equity vs likely
+defending ranges (~46.9% raw equity when called) AND wins the blinds
+outright a majority of the time. Raising is the only +EV line.
+
+If user picked raise → "← good pick, you have an aggressive baseline."
+If user picked fold/call → "the +0.66 play is raise; your pick is
+{conservative/passive} — we'll note that and adjust."
+
+---
+
+### Q2 — Defending the BB: 76s vs BTN 10bb open
+
+```
+🃏 Q2 / 4
+
+  100bb. BTN raises to 10bb (a huge sizing — not standard 2.5x).
+  Folds to you in BB with 76s (seven-six suited).
+
+    (1) 3-bet to 30bb
+    (2) call (invest 9 more)
+    (3) fold
+
+  Type 1, 2, or 3.
+```
+
+**After user picks:**
+
+```
+✓ Your choice: **{user_pick}**
+
+Other options' EV (Monte Carlo vs BTN 10bb-open range):
+
+| Option   | EV         | Reason                                                                |
+|---       |---         |---                                                                    |
+| `3-bet`  | -7.65 BB   | BTN's 10bb open range is uncapped; 76s has 36% equity in a 3bp, can't profitably bloat |
+| `call`   | -2.90 BB   | Pot odds need ~44%, you have 39%. Implied odds help but BB is OOP postflop |
+| `fold`   |  0.00 BB ★ | A 10bb open is HUGE — fold equity is gone, postflop is OOP w/ a marginal hand |
+```
+
+**Why the ★ play is best:** Against a *standard* 2.5x BTN open, 76s is
+a defend (call or mix 3-bet). Against a **10bb sizing**, the math
+flips — fold equity collapses and pot odds get worse. The lesson:
+**sizing > hand strength**. Adjust to villain's bet size, not your
+range chart.
+
+If user picked fold → "← good read, you adjust to sizing."
+If user picked call/3-bet → "your instinct is to defend BB suited
+connectors — usually right, but the 10bb sizing changes the math.
+We'll note 'plays defensively vs standard sizing'."
+
+---
+
+### Q3 — Postflop c-bet: AK on K♦7♠2♥ (dry), OOP after preflop raise
+
+```
+🃏 Q3 / 4
+
+  100bb. You raised MP, BB called. Flop: K♦ 7♠ 2♥ (rainbow, dry).
+  Pot 7bb. You have A♥K♣ — top pair top kicker.
+
+    (1) c-bet 33% pot (~2.3bb)
+    (2) check
+
+  Type 1 or 2.
+```
+
+**After user picks:**
+
+```
+✓ Your choice: **{user_pick}**
+
+Other options' EV (Monte Carlo, hero 88.3% equity vs caller range):
+
+| Option   | EV          | Reason                                                                |
+|---       |---          |---                                                                    |
+| `c-bet`  | +7.54 BB ★  | Range advantage on K-high dry board; ~55% of BB's range folds, value from worse Kx |
+| `check`  | +1.68 BB    | Slowplay is fine (no draws to protect), but you give up fold equity AND lose value from worse |
+```
+
+**Why the ★ play is best:** Dry K-high boards = preflop raiser's
+playground. You have range advantage AND nut advantage. C-betting
+small (33%) prints money — folds the dominated portion of BB's range
+and gets called by Kx that you crush. Checking on a dry board with
+TPTK leaves ~6bb on the table.
+
+If user picked c-bet → "← good, you have a postflop pulse."
+If user picked check → "the +7.54 play is c-bet; check loses ~6bb of
+value. We'll note 'leans passive postflop' and pick a style that
+nudges you toward more aggression."
+
+---
+
+### Q4 — River bluff-catcher: JJ on T♠7♠4♦A♦9♠, facing 70%-pot river bet
+
+```
+🃏 Q4 / 4
+
+  100bb. Pot 20bb on the river. Board: T♠ 7♠ 4♦ A♦ 9♠
+  (3 spades on board, A on turn).  You have J♥J♦ (no spade).
+  Villain bets 14bb (70% pot).
+
+    (1) call
+    (2) fold
+
+  Type 1 or 2.
+```
+
+**After user picks:**
+
+```
+✓ Your choice: **{user_pick}**
+
+Other options' EV (vs realistic vs GTO opponent):
+
+| Option   | EV (vs real)  | EV (vs GTO)  | Reason                                                                |
+|---       |---            |---           |---                                                                    |
+| `call`   | -2.00 BB      | +5.68 BB     | JJ is a pure bluff-catcher: 100% vs bluffs, 0% vs value. Result depends on villain's bluff freq |
+| `fold`   |  0.00 BB ★    |  0.00 BB     | Real opponents under-bluff river big bets (~25% vs GTO ~41%). Fold against unknown villain |
+```
+
+**Why the ★ play depends on villain:**
+- **Unknown / human villain** → fold. Most players under-bluff scary
+  river boards (3-flush + ace). At 25% bluff freq, call is -2.0 BB.
+- **Solver / GTO villain** → call. At GTO bluff freq (~41%), call is
+  +5.7 BB. JJ is exactly the kind of medium-strength hand GTO is
+  trying to make indifferent.
+
+The lesson: **river bluff-catching is about villain frequencies, not
+hand strength.** JJ here is the same equity hand whether villain
+bluffs 25% or 50% — what changes is the *required* equity vs the
+*observed* bluff rate.
+
+If user picked fold → "← good, defaults to fold vs unknowns."
+If user picked call → "your instinct is to call light — works vs GTO
+solvers but loses to typical underbluffing humans. We'll note 'calls
+station tendencies'."
+
+---
+
+### Style label from Q1-Q4
+
+After all 4 answers, map the user's pattern to a style:
+
+| Pattern                                        | Style label       |
+|---                                             |---                |
+| Mostly aggressive (Q1 raise, Q3 c-bet, Q2 3b/call) | loose-aggressive  |
+| Mostly fold/check (Q1 raise, Q3 check, Q2 fold, Q4 fold) | tight-aggressive  |
+| Mixed by spot (adjusts to sizing in Q2, board in Q3) | balanced          |
+
+Show the user:
+
+```
+📊 Your profile from Q1-Q4:
+
+  Q1 QJo MP        → you picked {choice}  ({★ if optimal})
+  Q2 76s vs 10bb   → you picked {choice}  ({★ if optimal})
+  Q3 AK on K72     → you picked {choice}  ({★ if optimal})
+  Q4 JJ vs river   → you picked {choice}  ({★ if optimal})
+
+  Style: {label} — {1-line description}
+
+  This maps to {assets/decide_X.py}. Want to use it?
+```
+
+Then continue to the original Style menu (a/b/c), with the recommended
+style pre-selected based on the profile. User can override.
+
+---
+
 ```
 🤖 Stage 1: Style
 

@@ -2,6 +2,32 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.17.0] — 2026-05-25 — "Per-choice EV feedback on Q1-Q4 style profiling"
+
+`guided.md` Stage 1 now opens with **4 quick decision spots (Q1-Q4)**
+that profile the user's playstyle before the (a)/(b)/(c) style menu.
+Each Q shows **per-choice EV in BB**, computed via Monte Carlo (2000+
+iters) vs realistic modern 6-max ranges using `treys`, so the user
+learns from each pick rather than vibing.
+
+Scenarios:
+- **Q1** QJo from MP, folds around — raise +0.66 ★ / call -0.25 / fold 0
+- **Q2** 76s BB vs BTN **10bb** open (oversized) — fold 0 ★ / call -2.9 / 3-bet -7.65
+- **Q3** AK on K♦7♠2♥ dry, OOP — c-bet +7.54 ★ / check +1.68
+- **Q4** JJ on T♠7♠4♦A♦9♠, facing 70%-pot river — fold 0 ★ (vs real human under-bluff); call +5.68 (vs GTO)
+
+After Q4 the path maps the answer pattern to a recommended style
+(loose-agg / tight-agg / balanced) and pre-fills the (a)/(b)/(c) pick.
+
+EVs are pedagogical anchors, not solver-exact. Sources of truth in
+`paths/guided.md` Stage 1 — pre-computed offline so user interaction
+costs zero compute.
+
+- `./pokerkit version` reports `0.17.0`.
+- `./pokerkit test` still passes 21/21 (markdown-only change).
+
+---
+
 ## [0.16.0] — 2026-05-25 — "4 Stages + Skip Ahead — progressive learning restored, 3 paths kept"
 
 Real dogfood feedback drove this redesign. v0.15 had a friendly 3-path

@@ -58,12 +58,34 @@ def _move_creds_aside() -> bool:
 
 def _restore_creds_backup() -> bool:
     """Move `.arena-credentials.rejected` back to `.arena-credentials` if the
-    primary file is missing. Returns True on restore. No-op if there's no
-    backup or the primary already exists."""
+    primary file is missing OR invalid. Returns True on restore. No-op if
+    there's no backup or the primary is valid.
+
+    Edge case (data-loss prevention): if the primary file exists but is
+    empty / unparseable JSON (e.g. an interrupted write left a partial
+    file), treat it as garbage, remove it, and restore from backup. Without
+    this branch, an interrupted register would leave the user with a
+    broken primary AND a valid backup, but `_restore_creds_backup` would
+    refuse to clobber and the user would silently lose both."""
     if not CREDS_BACKUP_PATH.exists():
         return False
     if CREDS_PATH.exists():
-        return False
+        # Probe the primary — only keep it if it parses as a dict with at
+        # least an apiKey-ish shape. Any read/parse failure means we'd
+        # rather restore the known-good backup than preserve garbage.
+        try:
+            content = CREDS_PATH.read_text()
+            parsed = json.loads(content)
+            if isinstance(parsed, dict) and parsed:
+                # Primary is non-empty valid JSON — don't clobber.
+                return False
+            # Empty dict / non-dict → garbage, fall through to restore.
+            CREDS_PATH.unlink()
+        except Exception:
+            try:
+                CREDS_PATH.unlink()
+            except OSError:
+                return False
     try:
         os.replace(str(CREDS_BACKUP_PATH), str(CREDS_PATH))
         print("[arena-pokerkit] restored previous .arena-credentials "

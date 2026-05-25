@@ -1,6 +1,6 @@
 ---
 name: arena-pokerkit
-version: 0.18.0
+version: 0.18.2
 description: Use this skill whenever the user wants to build, improve, register, or submit a poker bot to dev.fun Arena's Poker Eval benchmark. Trigger on "build a poker bot", "join poker eval", "improve my arena agent", "submit poker bot", "arena starter kit", "pokerkit", or any mention of the poker-eval arena. Handles cloning, installation, strategy elicitation, decide() editing, local self-play validation, Arena evaluation, replay analysis, and submission end-to-end. Asks the user only for strategy taste and submission approval; runs all build/test/run commands autonomously.
 license: MIT
 ---
@@ -58,6 +58,13 @@ license: MIT
   - `500-hand quick test` → `ARENA_COMPETITION_ID=cmpdk0pt00eawvcaf1es8plw2`
   - `5000-hand anytime-ready test` → `ARENA_COMPETITION_ID=cmpkdus9200syw8do5644oymp`
   Both share the same reference panel. Default is 500-hand.
+- **Language matching is global.** Match the user's language for the
+  ENTIRE session, not just the greeting. Translate all user-facing
+  prompts in path files (Arena picker, milestone messages, Stage
+  transitions, "Ready for Arena?" blocks, anchor table labels, etc.)
+  when the user is non-English. Keep code blocks (commands, file
+  paths, JSON keys) untranslated. The path files themselves stay in
+  English on disk — you translate inline when speaking.
 - **Beyond Stage 4 — final-tier mention.** Whenever the user finishes
   Stage 4 (or asks "what's next after the HL loop?"), mention that
   the road continues into solver / trained-weights territory and
@@ -190,6 +197,17 @@ start narrating Phase 1.
 | `skip to HL loop` / `skip to curriculum` / `i have a bot` / `jump to stage 4` | `paths/skip-hl.md` |
 | `show levels` / `advanced` / `levels` | Surface `references/optimization-levels.md` ladder table, then re-prompt with the paths above |
 | Explicit task ("build me a tight-aggressive bot and submit") | Skip the greeting, jump to Step 0 with their constraint as the strategy answer |
+
+**If the user replies with anything not matching the above keywords**
+(e.g. "help", "start building", "what's the prize?", a question, or
+just any free text):
+- If it's a question: answer briefly, then re-show the 5 path choices.
+- If it's an intent-y phrase: best-match (e.g. "help" / "show me" →
+  `learn`; "I want to build" → `quick`; "I know what I'm doing" → ask
+  if `skip to research` or `skip to HL loop`).
+- If totally ambiguous: re-prompt with "Not sure what to do? Pick
+  one: `quick` / `guided` / `learn` / `skip to research` /
+  `skip to HL loop`."
 
 `paths/{quick,guided,learn,skip-research,skip-hl}.md` are subordinate
 scripts — they reuse the Steps 0-6 below but pace and disclose

@@ -16,7 +16,7 @@
 
 ```
 Setup        (Phase 1, silent)        → repo cloned, uv synced, baseline noted
-Stage 1      Style                    → style label saved, decide() reads it
+Stage 1      Style                    → style label saved, decide() Python updated
              → Arena (500-hand quick test) → score with 4-stage anchor → ASK
 Stage 2      Strategy.md              → STRATEGY.md (spec) used to write decide() Python
              → Arena → score → ASK
@@ -62,7 +62,7 @@ as `baseline_local`. Do not invent an Arena number here.
 🤖 Stage 1: Style
 
   Picking "tight-aggressive" — a balanced, low-variance default.
-  Saved to .pokerkit-milestones.json. decide() now reads this flag.
+  Saved to .pokerkit-milestones.json. decide() Python updated to match.
 
   Running it:
     ./pokerkit selfplay --hands 200 --seed 42

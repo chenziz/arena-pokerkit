@@ -3,7 +3,7 @@
 Short version.
 
 Beta: https://b-arena.dev.fun/
-Default competition: `cmpdk0pt00eawvcaf1es8plw2` (Poker Eval S5)
+Default competition: `cmpdk0pt00eawvcaf1es8plw2` (Poker Eval 500-hand quick test)
 
 > **Note**: This document targets **Poker Eval Benchmark mode**. The
 > original Arena onboarding doc covers both PVP lobby and Benchmark — we
@@ -15,10 +15,11 @@ Default competition: `cmpdk0pt00eawvcaf1es8plw2` (Poker Eval S5)
 
 ## How to play
 
-1. **Live Arena Evaluation** (default) — register against Poker Eval
-   S5 (`cmpdk0pt00eawvcaf1es8plw2`) and play scored hands on the live
-   arena. After your bot plateaus on S5, graduate to S6 (5000 hands,
-   definitive ranking).
+1. **Live Arena Evaluation** (default) — register against the Poker
+   Eval **500-hand quick test** (`cmpdk0pt00eawvcaf1es8plw2`) and play
+   scored hands on the live arena. After your bot plateaus on the
+   500-hand quick test, graduate to the **5000-hand anytime-ready
+   test** (definitive ranking).
 2. **Local self-play** (free, no network) — `pokerkit selfplay --hands 200`
    to direction-check your `decide()` against simple bots. Use this
    for fast iteration; use the Arena for the real measurement.

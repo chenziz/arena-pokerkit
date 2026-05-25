@@ -2,6 +2,63 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.18.2] — 2026-05-25 — "Final review patch"
+
+Last patch before GitHub upload — addresses the final round of Claude
++ Codex reviews. No behavior changes for users who already had
+working bots; tightens edges and removes contradictions in docs.
+
+### Fixed
+
+- **`_normalize_action_name` is now case + whitespace robust.**
+  Previously only mapped exact `"all_in"` / `"allin"` to `"all-in"`.
+  Now strips, lower-cases, and collapses `_`→`-` first — so `AllIn`,
+  `all_in`, ` all-in `, and `allin` all canonicalise to `all-in`. Also
+  applied at the top of `llm_agent._validate_against_allowed` so the
+  LLM path can't bypass the normaliser. New unit test in
+  `tests/test_action_normalize.py` covers all four variants.
+- **`_restore_creds_backup` no longer silently loses data on an
+  interrupted write.** If `.arena-credentials` exists but is empty or
+  unparseable JSON (e.g. interrupted register), the file is now
+  removed before falling through to restore from
+  `.arena-credentials.rejected`. Previously the restore was skipped
+  and the user lost both copies of working creds.
+- **S5/S6 jargon swept out of user-visible docs.** `docs/play.md`,
+  `examples/prompt.md`, `examples/colab/quickstart.ipynb` (markdown +
+  code-cell comment), and `references/optimization-levels.md` Level 4
+  plateau prose now use "500-hand quick test" / "5000-hand
+  anytime-ready test". S5/S6 labels only survive in `references/` /
+  `.env.example` / `SKILL.md` Rules — never user-facing.
+- **Pacing lines no longer claim `decide()` reads strategy at
+  runtime.** `paths/quick.md` and `paths/learn.md` previously said
+  "decide() reads it" / "label saved, decide() reads it" — these
+  contradicted v0.18.1's source-vs-artifact framing. Now both say
+  "decide() Python updated".
+- **`research_static_chart.py` atomic write uses a unique temp
+  suffix.** Concurrent runs could collide on the fixed `.tmp` path;
+  switched to a per-run hex token, mirroring `arena_client.py`'s
+  `_atomic_write` pattern.
+
+### Added
+
+- **First-contact routing fallback.** `SKILL.md` now has a default
+  branch for replies that don't match any keyword (questions, "help",
+  free text) — answer briefly + re-show paths, or best-match for
+  intent-y phrases, or re-prompt with the full path menu.
+- **Multi-language rule made global.** `SKILL.md` now states
+  language-matching applies to the ENTIRE session, not just the
+  greeting; agent translates all user-facing prompts in path files
+  inline when the user is non-English. Code blocks stay untranslated.
+
+### Internal
+
+- **Cost docstring in `examples/llm_agent.py` no longer quotes
+  `$0.02/decision` or `$60/match`.** Replaced with
+  "varies by model + token volume — budget cautiously" to match the
+  rest of v0.18's cost framing.
+- `pyproject.toml`, `examples/cli.py VERSION`, README badge, and
+  SKILL.md frontmatter all on `0.18.2`.
+
 ## [0.18.1] — 2026-05-25 — "Codex cleanup"
 
 Final fix-up pass before colleague handoff. All issues caught by a Codex

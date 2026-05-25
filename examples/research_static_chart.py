@@ -201,9 +201,21 @@ def _export_preflop_json(out_path: str = "research/preflop.json") -> str:
         "ranges": chart,
     }
 
-    tmp_path = path.with_suffix(path.suffix + ".tmp")
-    tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True))
-    os.replace(tmp_path, path)
+    # Unique temp name (NamedTemporaryFile-style) to avoid collisions when
+    # two concurrent runs write the same target — fixed `.tmp` suffix would
+    # let one overwrite the other mid-flight. Mirrors arena_client.py
+    # _atomic_write pattern.
+    import secrets as _secrets
+    tmp_path = path.with_suffix(path.suffix + f".tmp.{_secrets.token_hex(4)}")
+    try:
+        tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True))
+        os.replace(tmp_path, path)
+    finally:
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
     return str(path.resolve())
 
 

@@ -7,9 +7,9 @@ ANTHROPIC_API_KEY is set), then OpenAI / OpenAI-compatible endpoints
 (OpenRouter, Together, Groq, vLLM, ...) via OPENAI_API_KEY. Falls back
 to the L1 heuristic on any parse failure, timeout, or missing API key.
 
-Cost estimate: ~$0.02 per decision with mid-tier models (Sonnet 4.x,
-GPT-4-class). A 500-hand match averages ~3000 actions → roughly $60
-per full benchmark. Run a small `--max-hands 50` preview first.
+Cost: paid LLM API calls per decision. Per-match cost varies by
+model + token volume — budget cautiously and measure your own first
+500-hand run before committing to long matches.
 
 CLI:
     uv run examples/llm_agent.py
@@ -338,7 +338,14 @@ def _validate_against_allowed(action: dict, table: dict) -> dict:
     """Coerce LLM action into something the server will accept."""
     allowed = table.get("allowedActions") or {}
     available = set(allowed.get("availableActions") or [])
-    name = action.get("action")
+    # Normalise the action name BEFORE the membership check so variants like
+    # "AllIn" / "all_in" / " all-in " / "allin" map to "all-in" and aren't
+    # falsely treated as illegal. Same helper as agent.py for consistency.
+    from agent import _normalize_action_name  # type: ignore
+    raw_name = action.get("action")
+    name = _normalize_action_name(raw_name) if isinstance(raw_name, str) else raw_name
+    if isinstance(name, str) and name != raw_name:
+        action["action"] = name
     if name not in available:
         if "check" in available:
             action["action"] = "check"

@@ -38,7 +38,7 @@ You don't build a poker bot in one shot. You build it through **4
 progressive stages**, each producing an artifact you own and a
 visible score lift:
 
-  Stage 1  Style          → ~-25 bb/100  (label saved, decide() reads it)
+  Stage 1  Style          → ~-25 bb/100  (label saved, decide() Python updated)
   Stage 2  Strategy.md    → ~-15 bb/100  (real ranges + sizing in a file YOU own)
   Stage 3  Auto Research  → ~-5  bb/100  (GTO + HUD data baked into decide())
   Stage 4  Curriculum     → ~+3  bb/100  (iterate: run → analyze → patch → repeat)

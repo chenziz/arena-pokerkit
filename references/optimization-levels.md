@@ -149,14 +149,17 @@ patterns; finding and exploiting them is what this loop does.
 
 **Reference.** `references/heuristic-learning.md` for the philosophy.
 
-**Plateau on S5.** When S5 deltas drop below +2 bb/100 for 2
-consecutive rounds, you've extracted all the signal S5 can give
-(±20 raw CI ceiling). Graduate to S6 (5000 hands, ±6 raw CI) for the
-definitive ranking; don't keep iterating on S5 once CI is saturated.
+**Plateau on the 500-hand quick test.** When 500-hand-test deltas
+drop below +2 bb/100 for 2 consecutive rounds, you've extracted all
+the signal the 500-hand quick test can give (±20 raw CI ceiling).
+Graduate to the **5000-hand anytime-ready test** (5000 hands, ±6 raw
+CI) for the definitive ranking; don't keep iterating on the 500-hand
+quick test once CI is saturated.
 
-Beyond S6, the remaining lift requires either runtime LLM reasoning
-(Level 5) or trained weights (Level 6). Decide whether to climb to
-Level 5/6 or lock in your current S6 score.
+Beyond the 5000-hand anytime-ready test, the remaining lift requires
+either runtime LLM reasoning (Level 5) or trained weights (Level 6).
+Decide whether to climb to Level 5/6 or lock in your current
+5000-hand-test score.
 
 ## Level 5 — LLM-in-the-loop (optional — expensive)
 

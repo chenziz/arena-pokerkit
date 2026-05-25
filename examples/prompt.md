@@ -32,7 +32,7 @@ states from examples.
 
 Loop (matches the live poker-eval skill):
   1. POST /api/arena/texas/benchmark/start { competitionId: "cmpdk0pt00eawvcaf1es8plw2" }
-     (default competition is Poker Eval S5 — id above)
+     (default competition is the Poker Eval 500-hand quick test — id above)
   2. GET  /api/arena/texas/pending-actions?competitionId=...
      returns { tables: [...] } whenever it is your turn
   3. if tables is non-empty:

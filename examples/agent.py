@@ -424,20 +424,38 @@ def _compute_eta(start_time: float, hands_done: Any, target: Any) -> str:
 # Accept both from user-written decide() implementations and normalise to
 # the canonical hyphen form before submission so a "_" doesn't 400 the
 # server. Cheap and defensive — nothing more.
-_ACTION_ALIASES = {"all_in": "all-in", "allin": "all-in"}
+#
+# Robust against case, whitespace, and underscore/hyphen variants:
+#   "AllIn", " all-in ", "all_in", "allin" all → "all-in".
 
 
-def _normalize_action_name(action: dict) -> dict:
-    """Return a copy of `action` with `action.action` canonicalised to the
-    hyphenated wire form. No-op if the action dict is missing or malformed."""
-    if not isinstance(action, dict):
+def _normalize_action_name(name):
+    """Canonicalise an action name string to the hyphenated wire form.
+
+    Accepts a raw string (preferred) or an action dict. For a dict, returns
+    a copy with `action.action` canonicalised. No-op if input is missing or
+    malformed.
+
+    Handles case (`AllIn`), whitespace (` all-in `), and underscore/hyphen
+    variants (`all_in`, `allin`) — all map to `all-in`. Other names are
+    returned trimmed+lowered+underscore-as-hyphen so a stray `Fold ` or
+    `RAISE` doesn't silently 400 either.
+    """
+    if isinstance(name, dict):
+        action = name
+        raw = action.get("action")
+        normalised = _normalize_action_name(raw)
+        if isinstance(raw, str) and normalised != raw:
+            out = dict(action)
+            out["action"] = normalised
+            return out
         return action
-    name = action.get("action")
-    if isinstance(name, str) and name in _ACTION_ALIASES:
-        out = dict(action)
-        out["action"] = _ACTION_ALIASES[name]
-        return out
-    return action
+    if not isinstance(name, str):
+        return name
+    n = name.strip().lower().replace("_", "-")
+    if n in ("allin", "all-in"):
+        return "all-in"
+    return n
 
 
 def _attempt_credential_repair(client: ArenaClient, args: argparse.Namespace) -> bool:

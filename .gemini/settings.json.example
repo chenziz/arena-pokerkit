@@ -1,0 +1,23 @@
+{
+  "//": "Gemini CLI per-workspace settings — pre-trust this folder so",
+  "//1": "Gemini doesn't refuse to run with the 'not in a trusted directory' error.",
+  "//2": "",
+  "//3": "Copy this file to .gemini/settings.json BEFORE running `gemini` in this repo:",
+  "//4": "  cp .gemini/settings.json.example .gemini/settings.json",
+  "//5": "",
+  "//6": "Alternatives if you'd rather not commit a config:",
+  "//7": "  - export GEMINI_CLI_TRUST_WORKSPACE=true   (env var, per-shell)",
+  "//8": "  - gemini --skip-trust ...                  (per-invocation flag)",
+  "//9": "  - run `gemini` interactively once and pick 'Trust folder' in the dialog",
+  "//10": "",
+  "//11": "Notes:",
+  "//12": "  - User-level trust is also recorded in ~/.gemini/trustedFolders.json",
+  "//13": "    with entries like:  { \"/abs/path/to/arena-pokerkit\": \"TRUST_FOLDER\" }",
+  "//14": "  - The folderTrust enable flag below mirrors the user-settings recipe",
+  "//15": "    in Gemini's docs. Safe defaults for an open-source poker starter kit.",
+  "security": {
+    "folderTrust": {
+      "enabled": true
+    }
+  }
+}

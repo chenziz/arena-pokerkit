@@ -57,6 +57,10 @@ Pre-grant if you'd rather skip prompts:
   • Claude Code: cp .claude/settings.json.example .claude/settings.json
   • Codex CLI:   cp .codex/config.toml.example ~/.codex/config.toml
                  (or approve workspace once when Codex asks)
+  • Gemini CLI:  cp .gemini/settings.json.example .gemini/settings.json
+                 (or `export GEMINI_CLI_TRUST_WORKSPACE=true`,
+                  or `gemini --skip-trust ...` — Gemini refuses
+                  untrusted directories)
 Full version: references/permissions.md.
 ```
 

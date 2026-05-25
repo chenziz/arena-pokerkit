@@ -1,0 +1,39 @@
+# .gemini/settings.json.example
+
+Gemini CLI sandbox refuses to run any command in an "untrusted
+directory" and prints:
+
+```
+Gemini CLI is not running in a trusted directory. To proceed, either
+use `--skip-trust`, set the `GEMINI_CLI_TRUST_WORKSPACE=true`
+environment variable, or trust this directory in interactive mode.
+```
+
+This file is the per-workspace pre-trust template. Copy it to
+`.gemini/settings.json` once and Gemini will treat this repo as
+trusted on every future invocation (no flag, no env var).
+
+```bash
+cp .gemini/settings.json.example .gemini/settings.json
+```
+
+## Four ways to make Gemini run in this repo (pick one)
+
+1. **Ship the config** (this template): `cp .gemini/settings.json.example .gemini/settings.json`
+2. **Env var**: `export GEMINI_CLI_TRUST_WORKSPACE=true`
+3. **Per-invocation flag**: `gemini --skip-trust --prompt "..."`
+4. **Interactive once**: `gemini` (no `--prompt`), pick "Trust folder"
+   in the dialog. Gemini saves it to `~/.gemini/trustedFolders.json`.
+
+## Why not commit `.gemini/settings.json` directly?
+
+Same reason `.claude/settings.json` and `.codex/config.toml` aren't
+committed: per-user trust state shouldn't be shared via the repo.
+The `.example` file ships in git; the live `settings.json` is
+gitignored.
+
+## Reference
+
+- Gemini CLI Trusted Folders docs:
+  https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/trusted-folders.md
+- User-level trust file: `~/.gemini/trustedFolders.json`

@@ -55,3 +55,10 @@ htmlcov/
 .codex/config.toml
 !.codex/config.toml.example
 !.codex/config.toml.example.README
+
+# Gemini CLI per-workspace settings — keep .gemini/settings.json.example
+# committed (it's the pre-trust template) but ignore the user's live
+# settings.json and any local overrides.
+.gemini/*
+!.gemini/settings.json.example
+!.gemini/settings.json.example.README

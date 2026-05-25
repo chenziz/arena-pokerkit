@@ -59,6 +59,10 @@ Pre-grant if you'd rather skip prompts:
   • Claude Code: cp .claude/settings.json.example .claude/settings.json
   • Codex CLI:   cp .codex/config.toml.example ~/.codex/config.toml
                  (or approve workspace once when Codex asks)
+  • Gemini CLI:  cp .gemini/settings.json.example .gemini/settings.json
+                 (or `export GEMINI_CLI_TRUST_WORKSPACE=true`,
+                  or `gemini --skip-trust ...` — Gemini refuses
+                  untrusted directories)
 Full version: references/permissions.md.
 ```
 
@@ -301,10 +305,17 @@ style pre-selected based on the profile. User can override.
 
   Pick a starting style. Each maps to a reference decide() in assets/:
 
-    (a) tight-aggressive  — premium hands only, value-bet, low variance
-                            (← default if you say `go`)
-    (b) loose-aggressive  — wide range, frequent c-bets, 3-bets light
-    (c) balanced          — board-texture aware, mixed ranges
+    (a) tight-aggressive  — pick this and I'll wire it in immediately
+                            (← default if you say `go`; low variance)
+    (b) loose-aggressive  — pick this and I'll wire it in immediately
+                            (wide range, frequent c-bets, 3-bets light)
+    (c) balanced          — pick this and I'll wire it in immediately
+                            (board-texture aware, mixed ranges)
+    (d) custom            — I'll ask 4-6 follow-up questions about ranges,
+                            sizing, and aggression before writing
+                            STRATEGY.md. Pick this if you have a specific
+                            playstyle in mind (~1-2 minutes of deeper
+                            interview, not an instant generation).
 
   Type a letter, or `go` for (a).
 ```
@@ -316,6 +327,7 @@ Map:
 | `a` / `tight` / `go` | `assets/decide_baseline.py` | tight-aggressive |
 | `b` / `aggro` / `loose` | `assets/decide_ranged.py` (tweak openings wider) | loose-aggressive |
 | `c` / `balanced` / `mixed` | `assets/decide_textured.py` | balanced |
+| `d` / `custom` | Ask 4-6 follow-up Qs → fill template → pick closest `assets/decide_*.py` as base | custom |
 
 Save the picked style to `.pokerkit-milestones.json` (key
 `style_label`). Unlock stage milestone `style_picked` and pop:

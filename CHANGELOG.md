@@ -2,6 +2,83 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.18.5] — 2026-05-25 — "Round-2 multi-agent fresh-test fixes — Gemini trust, naming clarity, Custom-style expectations"
+
+Interim patch from Round-2 fresh tests (Gemini real CLI, Opencode,
+Hermes). Closes 3 friction items surfaced during cold-start runs. A
+comprehensive v0.18.6 with competitive-research findings will follow.
+
+### Fixed — Gemini CLI trust-directory friction
+
+Fresh Gemini users hit `"Gemini CLI is not running in a trusted
+directory"` on their first command. Our docs didn't mention the
+trust-folder model at all.
+
+- **New `.gemini/settings.json.example`** at repo root — Gemini CLI
+  pre-trust template (`security.folderTrust.enabled: true`). Copy to
+  `.gemini/settings.json` once and Gemini stops refusing the
+  workspace. Sibling `.gemini/settings.json.example.README` documents
+  the four ways to make Gemini run in this repo (config / env var /
+  flag / interactive trust dialog).
+- **`.gitignore` updated** to commit the `.example` but ignore the
+  user's live `.gemini/settings.json`, mirroring the same pattern
+  used for `.claude/` and `.codex/`.
+- **`references/permissions.md`** (canonical heads-up source) now
+  documents the Gemini trust dialog, the env var
+  `GEMINI_CLI_TRUST_WORKSPACE=true`, the `--skip-trust` flag, and the
+  pre-grant config recipe. Short 5-line block also updated so the
+  inline heads-up in `paths/quick.md` + `paths/guided.md` carries the
+  Gemini guidance.
+- **`AGENTS.md`** per-agent permission notes now include Gemini CLI
+  alongside Claude Code, Codex, Cursor, etc.
+
+### Fixed — naming-collision confusion (Arena Starter Kit vs PokerKit)
+
+Multiple Round-2 reviewers flagged: fresh users see `./pokerkit`
+command + clone of `arena-pokerkit` repo + dependency on
+`prinai/pokerkit` engine and get confused about what "PokerKit" means.
+
+- **SKILL.md** opens with a `**Naming**` blockquote in the top 5
+  lines clarifying that **Arena Starter Kit** is the product, the
+  `./pokerkit` command is our CLI wrapper, and standalone "PokerKit"
+  in error messages refers to the upstream `prinai/pokerkit` engine.
+- **README.md** first paragraph propagates the same explicit naming
+  callout (replacing the older "Naming." note with the clearer
+  product / CLI / engine three-way distinction).
+
+### Fixed — `(c) Custom` style option set no user expectations
+
+Gemini fresh test found: when a user picks the Custom style option,
+the prompt didn't explain that picking Custom triggers a 4-6 question
+follow-up interview. User expects an immediate STRATEGY.md and gets
+confused by the extra prompts.
+
+- **SKILL.md Step 2 (Elicit strategy)** now spells out that
+  Tight-aggressive / Loose-aggressive generate STRATEGY.md
+  immediately, while Custom adds 1-2 minutes of deeper interview.
+- **`paths/guided.md` Stage 1 style menu** adds a new `(d) custom`
+  option with the same expectation-setting text, and the
+  user-input mapping table now maps `d` / `custom` to the
+  follow-up-questions flow.
+
+### Bumped
+
+- `pyproject.toml`: 0.18.4 → 0.18.5
+- `examples/cli.py` `VERSION`: 0.18.4 → 0.18.5
+- `SKILL.md` frontmatter version: 0.18.4 → 0.18.5
+- `README.md` badge: 0.18.4 → 0.18.5
+
+### Verified
+
+- 34/34 pytest tests pass (no code changes, pure markdown + config).
+- `./pokerkit version` reports `0.18.5`.
+- `.gemini/settings.json.example` exists with valid Gemini config.
+- `.gitignore` excludes `.gemini/settings.json` and keeps
+  `.gemini/settings.json.example` + `.gemini/settings.json.example.README`.
+- SKILL.md has Naming callout in top 5 lines of the body.
+- `paths/guided.md` Custom-style option carries expectation-setting
+  text; SKILL.md Step 2 Custom option carries the same.
+
 ## [0.18.4] — 2026-05-25 — "Multi-agent fresh test fixes — heads-up ordering, settings.json gaps, codex path, source-of-truth"
 
 3 fresh-agent tests (Claude Code simulator, Codex simulator, real

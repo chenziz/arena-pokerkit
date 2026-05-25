@@ -145,6 +145,15 @@ approves.
   auto-adds this workspace to its trusted list. To pre-grant, copy
   `.codex/config.toml.example` to `~/.codex/config.toml` (merge with
   any existing config).
+- **Gemini CLI**: trust this directory before running, or Gemini will
+  refuse with `"Gemini CLI is not running in a trusted directory"`.
+  Four options (pick one):
+    * `export GEMINI_CLI_TRUST_WORKSPACE=true` (env var, per-shell)
+    * `gemini --skip-trust ...` (per-invocation flag)
+    * Run `gemini` (no `--prompt`) interactively once, pick
+      "Trust folder" — saved to `~/.gemini/trustedFolders.json`
+    * `cp .gemini/settings.json.example .gemini/settings.json` to
+      pre-trust this workspace via shipped config.
 - **Cursor**: Settings → "Allow Workspace" for this repo.
 - **Aider / Continue / Windsurf / others**: each has its own prompt;
   approve on first run.

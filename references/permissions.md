@@ -35,6 +35,16 @@ your agent. Three things to know:
        - Codex CLI: copy .codex/config.toml.example to
          ~/.codex/config.toml, OR just approve the workspace once
          when prompted — Codex auto-adds it to its trusted list.
+       - Gemini CLI: trust this directory before running. Gemini
+         refuses to run in an untrusted folder with the message
+         "Gemini CLI is not running in a trusted directory". Pick one:
+           * Set env:    export GEMINI_CLI_TRUST_WORKSPACE=true
+           * Pass flag:  gemini --skip-trust ...
+           * Interactive mode: gemini (no --prompt) → "Trust folder"
+             — it asks once and remembers in
+             ~/.gemini/trustedFolders.json
+           * Ship config: cp .gemini/settings.json.example
+             .gemini/settings.json (pre-trusts the workspace)
        - Cursor / Aider / Windsurf / Continue: approve when prompted
          on first run. Each tool has its own per-workspace dialog.
 
@@ -115,8 +125,10 @@ the one-time exception is `uv sync` (PyPI install, ~30s) and Arena
 evaluation (you approve before I start). Pre-grant for Claude Code:
 copy .claude/settings.json.example to .claude/settings.json. For
 Codex: copy .codex/config.toml.example to ~/.codex/config.toml OR
-approve the workspace once when prompted. Full text:
-references/permissions.md.
+approve the workspace once when prompted. For Gemini CLI: copy
+.gemini/settings.json.example to .gemini/settings.json (or export
+GEMINI_CLI_TRUST_WORKSPACE=true) — Gemini refuses to run in an
+untrusted directory. Full text: references/permissions.md.
 ```
 
 ---

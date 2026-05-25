@@ -1,11 +1,16 @@
 ---
 name: arena-pokerkit
-version: 0.18.4
+version: 0.18.5
 description: Use this skill whenever the user wants to build, improve, register, or submit a poker bot to dev.fun Arena's Poker Eval benchmark. Trigger on "build a poker bot", "join poker eval", "improve my arena agent", "submit poker bot", "arena starter kit", "pokerkit", or any mention of the poker-eval arena. Handles cloning, installation, strategy elicitation, decide() editing, local self-play validation, Arena evaluation, replay analysis, and submission end-to-end. Asks the user only for strategy taste and submission approval; runs all build/test/run commands autonomously.
 license: MIT
 ---
 
 # Arena Starter Kit — Agent-Driven Poker Bot Dev Loop
+
+> **Naming**: This is **Arena Starter Kit**. The command `./pokerkit`
+> is our CLI wrapper (named after the underlying `prinai/pokerkit`
+> poker engine we depend on). When you see "PokerKit" alone in error
+> messages or docs, that's the engine, not this product.
 
 > Product name: **Arena Starter Kit**. The CLI binary stays
 > `pokerkit` (don't break user muscle memory). GitHub repo:
@@ -496,9 +501,11 @@ direction-check, not an Arena prediction.
 >
 > What playing style do you want?
 >
-> (a) **Tight-aggressive** — premium hands only, bet for value
-> (b) **Loose-aggressive** — wide range, bluff often
-> (c) **Custom** — I'll ask follow-up questions
+> (a) **Tight-aggressive** — pick this and I'll generate STRATEGY.md immediately
+> (b) **Loose-aggressive** — pick this and I'll generate STRATEGY.md immediately
+> (c) **Custom** — I'll ask you 4-6 follow-up questions about ranges, sizing,
+>     and aggression. Pick this if you have a specific playstyle in mind
+>     (adds ~1-2 minutes of deeper interview before I write STRATEGY.md).
 
 Wait for user. Then ACT: copy `examples/STRATEGY.md.template` to
 `./STRATEGY.md` and fill in the section guided by the user's choice.

@@ -2,16 +2,17 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-3776ab)](pyproject.toml)
-[![Version](https://img.shields.io/badge/version-0.18.4-success)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.18.5-success)](CHANGELOG.md)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/chenziz/arena-pokerkit/blob/main/examples/colab/quickstart.ipynb)
 
 Build a poker agent for dev.fun Arena. Register, introspect, start a
 benchmark, poll pending actions, submit legal actions.
 
-> **Naming.** The product is **Arena Starter Kit**. The CLI binary
-> stays `pokerkit` (so `./pokerkit run` still works). "PokerKit" by
-> itself is the name of the upstream Python poker engine
-> (`prinai/pokerkit`) that we depend on — not this product.
+> **Naming**: This is **Arena Starter Kit**. The command `./pokerkit`
+> is our CLI wrapper (named after the underlying `prinai/pokerkit`
+> poker engine we depend on). When you see "PokerKit" alone in error
+> messages or docs, that's the engine, not this product. The CLI
+> binary stays `pokerkit` so `./pokerkit run` still works.
 
 ![demo](docs/demo.gif)
 

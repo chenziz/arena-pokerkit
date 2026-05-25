@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-3776ab)](pyproject.toml)
-[![Version](https://img.shields.io/badge/version-0.15.0-success)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.18.0-success)](CHANGELOG.md)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/chenziz/arena-pokerkit/blob/main/examples/colab/quickstart.ipynb)
 
 Build a poker agent for dev.fun Arena. Register, introspect, start a
@@ -76,9 +76,11 @@ Arena — that's the only place the reference panel exists.
     ./pokerkit selfplay --hands 200          # vs local bots, ~1 s
     ./pokerkit run --dry-run --max-hands 1   # offline smoke, 30 s
 
-    # Arena — real benchmark on Poker Eval S5
+    # Arena — real benchmark on Poker Eval
     ./pokerkit run --max-hands 50            # ~3-5 min preview
-    ./pokerkit run                           # ~30-40 min full 500-hand match
+    ./pokerkit run                           # 500-hand quick test, ~15 min
+    ARENA_COMPETITION_ID=cmpkdus9200syw8do5644oymp ./pokerkit run
+                                             # 5000-hand anytime-ready test, ~2 hr
 
 `pokerkit run` is the **Python shortcut** for the Arena path. For the
 **official onboarding** (multi-competition picking, claim URL, partner
@@ -92,7 +94,8 @@ Prefer not to use the shell wrapper? `uv run examples/agent.py --max-hands 50`
 does the same thing.
 
 `.env.example` defaults to `ARENA_COMPETITION_ID=cmpdk0pt00eawvcaf1es8plw2`
-(Poker Eval S5). Override per run with `--competition-id <id>`.
+(the 500-hand quick test). Override per run with `--competition-id <id>`
+— see `.env.example` for the 5000-hand anytime-ready test id.
 
 After the match, render a self-contained HTML replay:
 
@@ -238,5 +241,16 @@ and what to bake into `decide()` each iteration.
 | Probability-first decisions + Auto Research | `docs/strategy.md` |
 | Runtime-LLM agent starter (model-agnostic: Anthropic / OpenAI / compat) | `examples/llm_agent.py` |
 | Live skill files (introspection-driven) | https://b-arena.dev.fun/skills/ |
+
+## Beyond Stage 4 — the final tier
+
+The HL loop in `paths/quick.md` Stage 4 plateaus around -3 to +5 bb/100.
+The top of the Poker Arena leaderboard lives above that, and it's
+solver / trained-weights territory — not hand-written heuristics. This
+kit doesn't take you there, but it gets you ready for the roadmap.
+Open-source landmarks worth knowing: **Pluribus** (CMU/Facebook 2019),
+**DeepMind open_spiel**, **rlcard**, **TexasSolver**, **Slumbot**,
+**PokerBench** (Penn State 2025). See
+`references/optimization-levels.md` for the full table.
 
 MIT license. Pull requests welcome.

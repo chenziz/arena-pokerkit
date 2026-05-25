@@ -13,7 +13,8 @@
 
 ```
 Setup (verify state, narrate)
-First Arena S5 baseline (if not already on record)
+Why HL Loop (WHY framing — even on skip path)
+First Arena baseline (if not already on record)
 Stage 4   Curriculum — iterate to plateau
 ```
 
@@ -76,21 +77,53 @@ baseline to iterate from.
 
 ---
 
+## Why HL Loop? (mention before dumping tools — even on skip path)
+
+```
+🎯 Why Stage 4 (HL loop)?
+
+You're skipping Stages 1-3 because you already have a working bot.
+Good — but worth understanding what we're doing before iterating.
+
+The HL loop's job is to fix specific leaks in your bot. Every Arena
+run leaves a trail — e.g. "losing 70 bb on AJ in MP" or "BB folding
+too often vs BTN c-bet". The HL loop reads `failure_report.txt`,
+identifies ONE leak per round, patches `decide()`, re-runs, repeats
+until no patches improve the score.
+
+This is how you go from "good strategy" to "good strategy that beats
+THIS opponent panel". Expected lift: +5-15 bb/100 over 4-6 iterations,
+typically pushing you from -3 into positive territory.
+
+The loop only works against a real Arena trail. That's why we start
+with one baseline match before we can patch anything.
+```
+
 ## First Arena baseline (ACT — required before iteration loop)
 
 Stage 4 measures DELTAS. We need a starting score before patching.
 
 Check `.arena-poker-state['iterations']`:
 - If it has at least 1 entry, use the most recent as the baseline.
-- If empty, run one fresh Arena S5 to establish baseline:
+- If empty, offer the **standard 2-option Arena picker** to establish
+  baseline:
 
 ```
-Need a baseline score before iterating. Running Arena S5 now.
+Need a baseline score before iterating. Pick one:
 
-  ./pokerkit run
+  • 500-hand quick test   — fast feedback (~15 min). Recommended for
+    HL loop iteration (you'll re-run after each patch).
 
-~15 min. I'll narrate every ~100 hands.
+  • 5000-hand anytime-ready test  — definitive ranking (~2 hr). Only
+    if you want a tight CI on the baseline before patching.
+
+Most users pick `500` here — the HL loop runs many short matches.
+
+Pick: `500` / `5000`.
 ```
+
+On the user's pick, run `./pokerkit run` with the right competition
+id — see SKILL.md "Rules for you" for the mapping.
 
 On terminal state:
 - Unlock `first_arena_score` (if not already).
@@ -110,7 +143,7 @@ Then enter the Stage 4 loop.
 
 Identical to `paths/quick.md` Stage 4. For each iteration:
 
-1. `./pokerkit run` (S5).
+1. `./pokerkit run` (500-hand quick test).
 2. `./pokerkit analyze --out failure_report.txt`.
 3. Read the report, identify ONE losing pattern, patch `decide()`.
 4. Show the diff:
@@ -121,8 +154,9 @@ Identical to `paths/quick.md` Stage 4. For each iteration:
       +   if pos == "UTG" and hand_class >= 9 and villain_vpip < 0.30:
    ```
 5. `./pokerkit test` — must pass.
-6. Re-run S5. Surface score with **4-stage anchor table** + 1-line
-   trajectory `{prev} → {curr} bb/100 ({+/-}{delta})`.
+6. Re-run the 500-hand quick test. Surface score with **4-stage
+   anchor table** + 1-line trajectory `{prev} → {curr} bb/100
+   ({+/-}{delta})`.
 
 After iteration 1, unlock stage milestone `curriculum_running`. After
 later iterations, pop `beat_baseline` / `positive_vs_panel` /
@@ -137,8 +171,36 @@ Three options at every iteration boundary, never more:
 ```
 
 Apply plateau / band-climb / overdue-climb rules from SKILL.md
-Step 6. When plateau hits on S5 (last 2 deltas < +2 bb/100),
-recommend graduation to S6.
+Step 6. When plateau hits (last 2 deltas < +2 bb/100), offer the
+standard 2-option Arena picker (`500` / `5000`) — most users have
+been on 500 the whole loop and want a 5000-hand run to lock in their
+definitive number.
+
+---
+
+## Stage 4 close — the final tier (mention once at the end)
+
+When the user finishes Stage 4, mention this once:
+
+```
+🌅 Beyond Stage 4 — solver / trained-weights territory.
+
+The Stage 4 HL loop ceiling is roughly -3 to +5 bb/100. To go higher,
+the industry approach is to **train your own neural net** or use a
+**post-flop solver** for canonical spots. Examples (open-source):
+
+  • Pluribus (CMU/Facebook, 2019) — first AI to beat human pros at
+    6-max NLHE. MCCFR self-play.
+  • DeepMind open_spiel — DeepCFR / NFSP / CFR+ implementations.
+  • rlcard — RL training framework with NFSP baselines.
+  • TexasSolver — open-source GTO post-flop solver.
+  • Slumbot — public NLHE HU bot, semi-open methods.
+  • PokerBench (Lin et al, Penn State 2025) — academic 6-max benchmark.
+
+We don't take you there in this kit — that's a ~1 week + GPU project.
+But the top of the Poker Arena leaderboard will be people doing
+exactly this.
+```
 
 ---
 
@@ -149,6 +211,9 @@ recommend graduation to S6.
 - Skip the visible-artifact rule — every iteration still produces
   `failure_report.txt` and a visible decide() diff
 - Skip the 4-stage anchor table in score reports — still applies
-- Auto-graduate to S6 — requires user opt-in after plateau
+- Skip the WHY framing — even on skip path, we tell the user WHY
+  iterate before dumping tools
+- Auto-graduate to the 5000-hand test — requires user opt-in after
+  plateau
 - Silently escalate to Level 5 (LLM-in-loop) or Level 6 (trained
   weights) — both require explicit opt-in past Stage 4

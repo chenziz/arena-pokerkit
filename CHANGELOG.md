@@ -2,6 +2,119 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.18.0] — 2026-05-25 — "Final consolidation — WHY framing, final-tier ladder, 500/5000-hand labels, no S5/S6 jargon"
+
+Final consolidation pass before handoff for GitHub upload + internal
+testing. Three big shifts in user-facing copy; no code/behavior
+changes.
+
+### Changed — WHY framing on every path, even the agent-builder skip paths
+
+Every path now explains **WHY** at the right moments, not just what:
+
+- **Why Auto Research?** — bot needs DATA, not opinions. GTO charts
+  give optimal preflop ranges instead of guesses; opponent HUD lets
+  you exploit specific opponents; board-texture buckets give correctly
+  sized bets. Without these, your strategy is opinions on paper.
+  Expected lift: +12-20 bb/100.
+- **Why HL Loop?** — every Arena run leaks specific patterns (e.g.
+  "losing 70bb on AJ-MP"). HL loop reads `failure_report.txt`,
+  identifies one leak, patches `decide()`, re-runs. Plateau when no
+  patches improve. How you go from "good strategy" to "good strategy
+  that beats THIS opponent panel". Expected lift: +5-15 bb/100 over
+  4-6 iterations.
+
+WHY framing added to: `paths/quick.md` (Stage 3 + Stage 4),
+`paths/guided.md` (Stage 3 + Stage 4), `paths/skip-research.md`
+(opens with Auto Research WHY), `paths/skip-hl.md` (opens with HL WHY).
+The skip paths used to dump tools — now they explain first.
+
+### Added — final-tier ladder mentioned across the kit
+
+The Stage 4 HL loop ceiling is roughly -3 to +5 bb/100. To go higher
+is solver / trained-weights territory. The kit now points at the
+open-source landmarks worth studying (not gated behind a milestone —
+just mentioned once at Stage 4 close):
+
+- **Pluribus** (CMU/Facebook, 2019) — first AI to beat human pros at
+  6-max NLHE; MCCFR self-play + AIVAT scoring.
+- **DeepMind open_spiel** — DeepCFR / NFSP / CFR+ implementations,
+  trainable on 6-max with a GPU.
+- **rlcard** (DATA Lab) — RL training framework, NFSP baselines.
+- **TexasSolver** — open-source GTO post-flop solver. Bridge between
+  Stage 3 (Auto Research) and trained weights.
+- **Slumbot** (Eric Jackson) — public NLHE HU bot, semi-open methods.
+- **PokerBench** (Lin et al, Penn State 2025) — academic 6-max benchmark.
+
+Surface points: every path file's Stage 4 close, `SKILL.md`
+("Beyond Stage 4" section + "Rules for you"), `references/optimization-levels.md`
+(new "The final tier" table at the end), `paths/learn.md`, `README.md`
+"Beyond Stage 4" section.
+
+### Changed — no more S5/S6 jargon in user-facing copy
+
+The two competitions internally are S5 (500 hands) and S6 (5000 hands),
+but those labels confused non-Arena-natives. Renamed everywhere
+user-facing:
+
+| Internal | User-facing label                  |
+|---       |---                                 |
+| S5       | **500-hand quick test** (default)  |
+| S6       | **5000-hand anytime-ready test**   |
+
+S5/S6 labels now appear ONLY inside `references/` (so backend
+developers retain the mapping), `.env.example` (comments only),
+and `SKILL.md` "Rules for you (do not show the user)" block. Zero
+S5/S6 in any user-facing path narration.
+
+User picks `500` / `5000` at the Arena gate. Agent internally maps to
+the right `competition_id`:
+- `500` → `cmpdk0pt00eawvcaf1es8plw2`
+- `5000` → `cmpkdus9200syw8do5644oymp`
+
+### Changed — identical Arena picker wording across all 3 paths
+
+The Arena gate now uses the SAME 2-option picker template in
+`paths/quick.md`, `paths/guided.md`, `paths/skip-research.md`,
+`paths/skip-hl.md`, and `SKILL.md` Step 5. Wording is byte-for-byte
+identical so a user moving between paths sees consistent framing.
+
+### Changed — `.env.example` rewritten for label-first comments
+
+`.env.example` now leads with the user-facing labels and shows the
+competition_id mapping clearly. Default is the 500-hand quick test.
+
+### Changed — README "Beyond Stage 4" callout
+
+`README.md` drops S5/S6 from the Arena quick-start block, names both
+test sizes explicitly, and adds a "Beyond Stage 4 — the final tier"
+section that points at the open-source landmarks (Pluribus, open_spiel,
+rlcard, TexasSolver, Slumbot, PokerBench).
+
+### Verified
+
+- 21/21 pytest tests pass.
+- `./pokerkit version` reports `0.18.0`.
+- `grep -in "S5\|S6\|cmpdk0pt00eawvcaf1es8plw2\|cmpkdus9200syw8do5644oymp" paths/*.md`
+  — competition IDs / S5 / S6 NEVER appear in user-facing path
+  narration (only in `references/`, `.env.example`, and SKILL.md
+  "Rules for you").
+- `grep -in "Pluribus\|Slumbot\|open_spiel\|TexasSolver\|DeepCFR\|rlcard"
+  paths/*.md SKILL.md references/optimization-levels.md` —
+  top-tier projects mentioned in at least 3 places.
+- `grep -in "why.*auto research\|why.*hl loop\|why iterate\|expected lift" paths/*.md`
+  — each path has WHY framing.
+- `paths/skip-research.md` and `paths/skip-hl.md` both open with WHY
+  framing before dumping tools.
+
+### Migration
+
+No code behavior changes. Existing CLI commands work identically. The
+`.env.example` was rewritten but the default `ARENA_COMPETITION_ID`
+value is unchanged. Users on v0.17 keep their `.arena-credentials`.
+
+---
+
 ## [0.17.0] — 2026-05-25 — "Per-choice EV feedback on Q1-Q4 style profiling"
 
 `guided.md` Stage 1 now opens with **4 quick decision spots (Q1-Q4)**

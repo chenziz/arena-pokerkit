@@ -5,16 +5,23 @@ intentionally omits the parts of the generic `/skills/arena.md` that
 do not apply here (claim URL flows, partner invitations, 402 entry
 fees) — Poker Eval is a public benchmark and skips all three branches.
 
-## Two seasons running in parallel
+## Two competition sizes running in parallel
 
-| Season | Hands | Time | CI (raw bb/100) | Use for | competition_id |
-|---|---|---|---|---|---|
-| S5 Standard | 500 | ~15 min | ±20 bb/100 | HL loop, daily leaderboard | `cmpdk0pt00eawvcaf1es8plw2` |
-| S6 Grand | 5000 | ~2 hr | ±6 bb/100 | Definitive ranking, championship | `cmpkdus9200syw8do5644oymp` |
+User-facing labels → internal name + competition_id:
 
-Both share the same reference panel. The 10× hand count
-delivers ~3× tighter CI — that's the only difference. Pick S5 for
-iteration; pick S6 only after S5 plateau.
+| User-facing label                 | Internal | Hands | Time    | CI (raw bb/100) | Use for                                          | competition_id                  |
+|---                                |---       |---    |---      |---              |---                                               |---                              |
+| **500-hand quick test** (default) | S5       | 500   | ~15 min | ±20 bb/100      | HL loop iteration, daily direction-check         | `cmpdk0pt00eawvcaf1es8plw2`     |
+| **5000-hand anytime-ready test**  | S6       | 5000  | ~2 hr   | ±6 bb/100       | Definitive ranking once you feel confident       | `cmpkdus9200syw8do5644oymp`     |
+
+> **NEVER show "S5" / "S6" to the user.** They're internal labels only.
+> When narrating, say "500-hand quick test" or "5000-hand anytime-ready
+> test" — the same hand-count labels the user picks with `500` / `5000`.
+
+Both share the same reference panel. The 10× hand count delivers ~3×
+tighter CI — that's the only difference. Pick the 500-hand test for
+iteration; pick the 5000-hand test when you've plateaued or feel
+ready for a locked-in number.
 
 > **About the reference panel** (one-time technical footnote — do
 > NOT surface this to the user as "you face DeepCFR"). The opponent

@@ -18,11 +18,11 @@
 ```
 Setup        (Phase 1, narrated)
 Stage 1      Style — ASK (3 options)
-             → Arena S5 → score + 4-stage anchor → ASK
+             → Arena (500 or 5000) → score + 4-stage anchor → ASK
 Stage 2      Strategy.md — ASK (edit inline?)
-             → Arena S5 → score → ASK
+             → Arena → score → ASK
 Stage 3      Auto Research — ASK (which sources?)
-             → Arena S5 → score → ASK
+             → Arena → score → ASK
 Stage 4      Curriculum — same as quick, iterate to plateau
 ```
 
@@ -290,20 +290,37 @@ Progress: █░░░  Stage 1 / 4  ·  Next: Strategy Written
 ```
 
 Then run local validation (`pokerkit test` + `pokerkit selfplay`) and
-ASK Arena S5:
+offer the **standard 2-option Arena picker** (identical wording across
+all paths):
 
 ```
-Stage 1 wired in. Time for the real eval. 500 hands vs Arena's
-reference panel (5 server-side bots, way stronger than local
-self-play). ~15 min.
+Stage 1 wired in. Time for the real eval — Arena's reference panel,
+way stronger than local self-play.
 
-  • `go`       — run Arena Stage 1
-  • `inspect`  — show me examples/agent.py first
+🎯 Ready for Arena?
+
+You can pick either:
+
+  • 500-hand quick test   — fast feedback (~15 min). Run after each
+    HL iteration to verify patches. CI is ~±20 bb/100 so close bots
+    can tie; use this for direction-checking.
+
+  • 5000-hand anytime-ready test  — definitive ranking (~2 hr).
+    Sample is large enough to give ~±6 bb/100 CI. Use this when
+    you're confident, want a real leaderboard score.
+
+Most users do 500-hand a few times during HL loop, then one 5000-hand
+when they've plateaued and want the locked-in number.
+
+Pick: `500` / `5000`.   (or `inspect` first to see examples/agent.py)
 ```
 
-On `go`, `./pokerkit run`. On terminal state, surface the score with
-the **4-stage anchor table** marking Stage 1 with "← you ran this".
-Include the 4-line CI explainer (this is the first Arena run).
+On the user's pick, run `./pokerkit run` with the right competition
+id — see SKILL.md "Rules for you" for the mapping.
+
+On terminal state, surface the score with the **4-stage anchor
+table** marking Stage 1 with "← you ran this". Include the 4-line CI
+explainer (this is the first Arena run).
 
 Then ASK approval for Stage 2.
 
@@ -335,7 +352,7 @@ about any line.
 
 {full_strategy_md_or_first_30_lines}
 
-  • `go`         — wire it into decide() and run Arena Stage 2
+  • `go`         — wire it into decide() and validate locally
   • `edit X`     — change line/section X (you tell me what)
   • `explain Y`  — what does section Y mean
 ```
@@ -438,6 +455,27 @@ marked) and re-offer Stage 3.
 
 ## Stage 3 — Auto Research (ASK — which sources?)
 
+### Why Auto Research? (mention before picking sources)
+
+```
+🎯 Why Stage 3 (Auto Research)?
+
+Your STRATEGY.md is "opinions on paper". The numbers in it (ranges,
+sizings) came from your style preference, not from data. Stage 3
+gives your bot real DATA to look up:
+
+  • GTO charts — the optimal preflop ranges, not your guess at them
+  • Opponent HUD (live /texas/agent-stats) — lets your bot exploit
+    THIS panel's specific patterns instead of playing every villain
+    the same
+  • Board-texture buckets — correctly sized bets on dry vs wet vs
+    paired boards, not one-size-fits-all sizing
+
+Without these, your strategy is opinions on paper. With them, your
+bot looks up the right answer before deciding. Expected lift: +12 to
++20 bb/100 over Stage 2.
+```
+
 ```
 🤖 Stage 3: Auto Research
 
@@ -449,7 +487,7 @@ marked) and re-offer Stage 3.
 
   • `all`       — pull all three (recommended)
   • `1`, `1,2`  — pick specific sources
-  • `skip`      — keep current bot, run Arena Stage 3 anyway
+  • `skip`      — keep current bot, run Arena anyway
 ```
 
 On user's pick: pull the chosen sources, write the JSON files, patch
@@ -462,7 +500,8 @@ list:
 ✓ agent.py patched to consult both before pure-style decisions.
 ```
 
-Run local validation. Run `./pokerkit run`. On terminal state:
+Run local validation. Then offer the **standard 2-option Arena
+picker** (`500` / `5000`). On terminal state:
 - Unlock stage milestone `research_wired` and pop.
 - Surface score with 4-stage anchor table (Stage 3 row marked).
 - If `positive_vs_panel` triggers, pop that marker.
@@ -472,16 +511,33 @@ Run local validation. Run `./pokerkit run`. On terminal state:
 
 ## Stage 4 — Curriculum (same as quick, iterate to plateau)
 
-This stage is identical between `quick` and `guided` paths — the
-loop is the loop. Follow the Stage 4 section of `paths/quick.md`:
+### Why iterate? (mention before starting the loop)
 
-1. Run S5.
+```
+🎯 Why Stage 4 (HL loop)?
+
+Stage 3 gave your bot DATA. But every Arena run leaks specific patterns
+— e.g. "losing 70 bb on AJ in MP" or "BB folding too often vs BTN
+c-bet". The HL loop reads `failure_report.txt`, identifies ONE leak per
+round, patches `decide()`, and re-runs. Repeat until no patches improve
+the score.
+
+This is how you go from "good strategy" to "good strategy that beats
+THIS opponent panel". Expected lift: +5-15 bb/100 over 4-6 iterations,
+typically pushing you from -3 into positive territory.
+```
+
+This stage is otherwise identical between `quick` and `guided` paths —
+the loop is the loop. Follow the Stage 4 section of `paths/quick.md`:
+
+1. Run the 500-hand quick test.
 2. Generate `failure_report.txt` via `./pokerkit analyze`.
 3. Read the report, propose ONE patch, show the diff.
-4. `./pokerkit test`, re-run S5.
+4. `./pokerkit test`, re-run the 500-hand quick test.
 5. Surface score with 4-stage anchor table + 1-line trajectory.
 6. Apply plateau / band-climb / overdue-climb rules from SKILL.md
-   Step 6 to decide whether to keep iterating or graduate to S6.
+   Step 6 to decide whether to keep iterating or graduate to the
+   5000-hand anytime-ready test.
 
 After iteration 1, unlock stage milestone `curriculum_running`. After
 later iterations, pop `plateau_broken` if triggered.
@@ -492,6 +548,38 @@ Three options at every iteration boundary, never more:
   • `go`       — one more iteration
   • `show me`  — read failure_report.txt + the proposed patch
   • `stop`     — lock in current score
+```
+
+When plateau hits, offer the standard 2-option Arena picker (`500` /
+`5000`) — most users have been on 500 the whole loop and want a
+5000-hand run to lock in their definitive number.
+
+---
+
+## Stage 4 close — the final tier (mention once at the end)
+
+When the user finishes Stage 4, mention this once:
+
+```
+🌅 Beyond Stage 4 — solver / trained-weights territory.
+
+The Stage 4 HL loop ceiling is roughly -3 to +5 bb/100. To go higher,
+the industry approach is to **train your own neural net** or use a
+**post-flop solver** for canonical spots. Examples (open-source):
+
+  • Pluribus (CMU/Facebook, 2019) — first AI to beat human pros at
+    6-max NLHE. MCCFR self-play.
+  • DeepMind open_spiel — DeepCFR / NFSP / CFR+ implementations.
+  • rlcard — RL training framework with NFSP baselines.
+  • TexasSolver — open-source GTO post-flop solver. Bake lookup tables
+    into your decide().
+  • Slumbot — public NLHE HU bot, semi-open methods.
+  • PokerBench (Lin et al, Penn State 2025) — academic 6-max benchmark.
+
+We don't take you there in this kit — that's a ~1 week + GPU project.
+But the top of the Poker Arena leaderboard will be people doing
+exactly this. If you want to seriously compete, your roadmap is:
+this kit → train weights (or import solver tables) on top.
 ```
 
 ---
@@ -506,9 +594,10 @@ Three options at every iteration boundary, never more:
 - After Stage 4 starts: reveal the **6-level optimization ladder**
   (`references/optimization-levels.md`) — Stage 4 IS Level 4 (HL
   loop), but the user is welcome to climb to Level 5/6 after plateau.
-- After `plateau_broken`: reveal **S6 graduation** option.
-- After `submitted_to_poker_eval` (if you go there): reveal **Poker
-  Arena tournament** as the prize destination they're building toward.
+- After `plateau_broken`: reveal **5000-hand anytime-ready test**
+  graduation option.
+- After Stage 4 close: surface the **final-tier ladder** (Pluribus,
+  open_spiel, etc.) as the road past this kit.
 
 This staged reveal is the "progressive disclosure" pattern — keep it
 strict. Never dump multiple unlocks at once.

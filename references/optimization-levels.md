@@ -246,3 +246,27 @@ by model) or Level 6 (1 week + GPU) without explicit user opt-in.
 
 Tell the agent at the start of your session ("I want to aim for Level
 3 / Level 5 / max") and it will pace the iterations accordingly.
+
+## The final tier — beyond Stage 4 / Level 6 (named projects)
+
+The Stage 4 HL loop ceiling is roughly **-3 to +5 bb/100** vs the
+reference panel. The top of the Poker Arena leaderboard lives above
+that — and that's the realm of solver lookups + trained weights, NOT
+hand-written heuristics. This kit does not take you there (it's a
+~1-week + GPU project), but it points at the open-source road:
+
+| Project | What | Why study it |
+|---|---|---|
+| **Pluribus** (Facebook AI / CMU, 2019) | First AI to beat human pros at 6-max NLHE. MCCFR self-play + AIVAT scoring. | Methods paper public, model not. The canonical 6-max superhuman reference. |
+| **DeepMind open_spiel** | DeepCFR / NFSP / CFR+ implementations, trainable on 6-max NLHE with a GPU. | If you want to train your own net, this is the cleanest starting framework. |
+| **rlcard** (DATA Lab) | RL training framework for poker. Includes 6-max NLHE environments and NFSP baselines. | Simpler entry point than open_spiel if your background is RL. |
+| **TexasSolver** | Open-source GTO post-flop solver. | Pre-compute optimal frequencies for canonical spots, bake the lookup table into your bot. Bridge between Stage 3 (Auto Research) and Level 6 — you get solver-grade postflop play without training. |
+| **Slumbot** (Eric Jackson) | Public NLHE HU bot, semi-open methods. | HU-only but the methods (action abstraction, blueprint strategy) transfer. |
+| **PokerBench** (Lin et al, Penn State 2025) | Academic 6-max NLHE benchmark. | Compare your bot to academic baselines, calibrate where you sit. |
+
+If you want to seriously compete at the top of Poker Arena, your
+roadmap is: this kit → Stage 4 plateau → import solver tables (Texas
+Solver) OR train weights (open_spiel / rlcard) on top.
+
+The kit's job stops at Stage 4. From there it's the open-source poker
+research community.

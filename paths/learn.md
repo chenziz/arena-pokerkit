@@ -65,8 +65,9 @@ against a fixed opponent set is reported in this unit. Most first-time
 bots score around -25 to -15 — that's expected and matches the Stage 1
 or Stage 2 anchor.
 
-**S5 CI**: 500 hands, ±20 bb/100 raw. Wide. Two close bots can't be
-ranked apart at S5 — that's why S6 exists (5000 hands, ±6 bb/100 CI).
+**500-hand quick test CI**: 500 hands, ±20 bb/100 raw. Wide. Two close
+bots can't be ranked apart at this sample size — that's why the
+**5000-hand anytime-ready test** exists (5000 hands, ±6 bb/100 CI).
 
 **The reference panel**: 5 strong bots Arena maintains. Currently
 DeepCFR-style trained agents — not LLMs, trained on millions of
@@ -105,15 +106,41 @@ artifact in their repo**, not reading more docs.
 
 | User asks | Quick answer | Deeper file |
 |---|---|---|
-| "what's S5 vs S6?" | S5 = 500 hands, ~15 min, daily. S6 = 5000 hands, ~2 hr, definitive. Same panel. | `references/poker-eval-arena.md` |
+| "what are the two test sizes?" | 500-hand quick test = ~15 min, ±20 CI, daily direction-check. 5000-hand anytime-ready test = ~2 hr, ±6 CI, definitive ranking. Same panel. | `references/poker-eval-arena.md` |
 | "what's an Auto Research source?" | GTO preflop chart, board-texture buckets, opponent HUD via `/texas/agent-stats`. All offline lookups; zero LLM calls at runtime. | `references/optimization-levels.md` Level 3 |
-| "what's Curriculum / HL loop?" | The Stage 4 iteration loop: run S5 → `pokerkit analyze` → `failure_report.txt` → patch one losing pattern → re-run. Repeat to plateau. | `references/heuristic-learning.md` |
+| "what's Curriculum / HL loop?" | The Stage 4 iteration loop: run the 500-hand quick test → `pokerkit analyze` → `failure_report.txt` → patch one losing pattern → re-run. Repeat to plateau. | `references/heuristic-learning.md` |
 | "can I use an LLM in decide()?" | Yes — that's Level 5 (paid, slower). Most strong bots are pure Python heuristics. Level 5 is on top of Stage 4, not part of the 4 stages. | `references/optimization-levels.md` Level 5 |
 | "how do stages map to the 6-level ladder?" | Stage 1 ≈ Level 1, Stage 2 = Level 2, Stage 3 = Level 3, Stage 4 = Level 4 (HL loop). Level 5/6 are paid/expert additions on top of Stage 4. | `references/optimization-levels.md` |
 | "what's the prize on Poker Arena?" | ~$50K pool; tournament not open yet. **Poker Eval has no prize** — it's training. | (Danny will confirm a number when public) |
 | "what's Researcher Track?" | Separate invite-only track for agent-AI researchers; top Poker Arena finishers may be invited. | (no public doc yet) |
 
 ---
+
+## Mention beyond Stage 4 — the long ladder
+
+If the user asks "how do top bots get there?" or after they're done
+reading the 3 sections, briefly mention:
+
+```
+🌅 Beyond Stage 4 — the long ladder.
+
+The Stage 4 HL loop ceiling is roughly -3 to +5 bb/100. The top of the
+Poker Arena leaderboard lives above that — and that's solver-lookup +
+trained-weights territory, not hand-written heuristics. Open-source
+landmarks worth knowing about:
+
+  • Pluribus (CMU/Facebook, 2019) — first AI to beat human pros at
+    6-max NLHE. MCCFR self-play methods.
+  • DeepMind open_spiel — DeepCFR / NFSP / CFR+ implementations.
+  • rlcard — RL training framework for poker.
+  • TexasSolver — open-source GTO post-flop solver.
+  • Slumbot — public NLHE HU bot.
+  • PokerBench (Lin et al, Penn State 2025) — academic 6-max benchmark.
+
+This kit doesn't take you there — it's a ~1 week + GPU project after
+Stage 4. But the leaderboard top is people doing exactly this. The
+kit gets you ready for that roadmap.
+```
 
 ## What `learn` **does not** do
 

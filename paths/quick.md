@@ -17,11 +17,11 @@
 ```
 Setup        (Phase 1, silent)        → repo cloned, uv synced, baseline noted
 Stage 1      Style                    → style label saved, decide() reads it
-             → Arena S5 → score with 4-stage anchor table → ASK
+             → Arena (500-hand quick test) → score with 4-stage anchor → ASK
 Stage 2      Strategy.md              → STRATEGY.md written, decide() reads it
-             → Arena S5 → score → ASK
+             → Arena → score → ASK
 Stage 3      Auto Research            → research/*.json pulled, decide() consults
-             → Arena S5 → score → ASK
+             → Arena → score → ASK
 Stage 4      Curriculum (HL loop)     → failure_report.txt + decide() patches
              → iterate to plateau
 ```
@@ -75,14 +75,33 @@ Apply by copying the closest reference impl:
 cp assets/decide_baseline.py examples/agent.py
 ```
 
-Then ASK approval to run Arena S5 (this is the user's first real eval):
+Then ASK approval to run Arena (this is the user's first real eval).
+Use the **standard 2-option picker** (identical wording across all
+paths):
 
 ```
-Ready to measure Stage 1 on Arena? 500 hands vs the reference panel,
-~15 min. Say `go` to start.
+🎯 Ready for Arena?
+
+You can pick either:
+
+  • 500-hand quick test   — fast feedback (~15 min). Run after each
+    HL iteration to verify patches. CI is ~±20 bb/100 so close bots
+    can tie; use this for direction-checking.
+
+  • 5000-hand anytime-ready test  — definitive ranking (~2 hr).
+    Sample is large enough to give ~±6 bb/100 CI. Use this when
+    you're confident, want a real leaderboard score.
+
+Most users do 500-hand a few times during HL loop, then one 5000-hand
+when they've plateaued and want the locked-in number.
+
+Pick: `500` / `5000`.
 ```
 
-On `go`, run `./pokerkit run`. On terminal state:
+On the user's pick, run `./pokerkit run` with the right competition
+id — see SKILL.md "Rules for you" for the mapping.
+
+On terminal state:
 
 1. Read `.arena-credentials` and surface the registration block ONCE
    per the SKILL.md "Registration" section (full apiKey, agentId,
@@ -228,6 +247,30 @@ Stage 2.
 
 ## Stage 3 — Auto Research (ACT)
 
+### Why Auto Research? (mention before pulling data)
+
+```
+🎯 Why Stage 3 (Auto Research)?
+
+Your STRATEGY.md is "opinions on paper". The numbers in it (ranges,
+sizings) came from your style preference, not from data. Stage 3
+gives your bot real DATA to look up:
+
+  • GTO charts — the optimal preflop ranges, not your guess at them
+  • Opponent HUD (live /texas/agent-stats) — lets your bot exploit
+    THIS panel's specific patterns instead of playing every villain
+    the same
+  • Board-texture buckets — correctly sized bets on dry vs wet vs
+    paired boards, not one-size-fits-all sizing
+
+Without these, your strategy is opinions on paper. With them, your
+bot looks up the right answer before deciding. Expected lift: +12 to
++20 bb/100 over Stage 2, typically bringing Arena from -25..-15 to
+-10..-3.
+```
+
+Then ACT:
+
 ```
 🤖 Stage 3: Auto Research
 
@@ -250,17 +293,32 @@ Concretely:
 4. Optionally pull `/texas/agent-stats` once at match start in
    `examples/agent.py` (cache to in-process state).
 
-Run local validation. Then ASK:
+Run local validation. Then offer the **standard 2-option Arena
+picker** (same wording as Stage 1 ASK):
 
 ```
-Research wired in. Want to run Arena S5 to measure Stage 3?
+🎯 Ready for Arena?
 
-  • `go`        — run Arena Stage 3
-  • `show me`   — list what's in research/ first
-  • `stop`      — lock in Stage 2 result
+You can pick either:
+
+  • 500-hand quick test   — fast feedback (~15 min). Run after each
+    HL iteration to verify patches. CI is ~±20 bb/100 so close bots
+    can tie; use this for direction-checking.
+
+  • 5000-hand anytime-ready test  — definitive ranking (~2 hr).
+    Sample is large enough to give ~±6 bb/100 CI. Use this when
+    you're confident, want a real leaderboard score.
+
+Most users do 500-hand a few times during HL loop, then one 5000-hand
+when they've plateaued and want the locked-in number.
+
+Pick: `500` / `5000`.
 ```
 
-On `go`, `./pokerkit run`. On terminal state:
+On the user's pick, run `./pokerkit run` with the right competition
+id — see SKILL.md "Rules for you" for the mapping.
+
+On terminal state:
 - Unlock stage milestone `research_wired` and print stage pop.
 - Surface score with 4-stage anchor table, mark Stage 3 row with
   "← you ran this".
@@ -271,20 +329,36 @@ On `go`, `./pokerkit run`. On terminal state:
 
 ## Stage 4 — Curriculum Learning (ACT, iterative)
 
+### Why iterate? (mention before starting the loop)
+
+```
+🎯 Why Stage 4 (HL loop)?
+
+Stage 3 gave your bot DATA (GTO charts, board buckets, opponent HUD).
+But every Arena run leaks specific patterns — e.g. "losing 70 bb on
+AJ in MP" or "BB folding too often vs BTN c-bet". The HL loop reads
+`failure_report.txt`, identifies ONE leak per round, patches `decide()`,
+and re-runs. Repeat until no patches improve the score.
+
+This is how you go from "good strategy" to "good strategy that beats
+THIS opponent panel". Expected lift: +5-15 bb/100 over 4-6 iterations,
+typically pushing you from -3 into positive territory.
+```
+
 ```
 🤖 Stage 4: Curriculum Learning
 
   Now the loop begins:
-    1. Run S5 (500 hands on the existing bot)
+    1. Run the 500-hand quick test on the existing bot
     2. I read failure_report.txt
     3. I propose 1 patch to decide()
-    4. Re-run S5
+    4. Re-run the 500-hand quick test
     5. Repeat until score plateaus (last 2 deltas < +2 bb/100)
 ```
 
 For each iteration:
 
-1. `./pokerkit run` (S5).
+1. `./pokerkit run` (500-hand quick test).
 2. `./pokerkit analyze --out failure_report.txt`.
 3. Read the report, identify ONE losing pattern, patch `decide()`.
 4. Show the diff of the patch to the user:
@@ -295,8 +369,8 @@ For each iteration:
       +   if pos == "UTG" and hand_class >= 9 and villain_vpip < 0.30:
    ```
 5. `./pokerkit test` — must pass.
-6. Re-run S5. Surface score with 4-stage anchor table + 1-line
-   trajectory `{prev} → {curr} bb/100 ({+/-}{delta})`.
+6. Re-run the 500-hand quick test. Surface score with 4-stage anchor
+   table + 1-line trajectory `{prev} → {curr} bb/100 ({+/-}{delta})`.
 
 After iteration 1, unlock stage milestone `curriculum_running` and
 pop the stage panel.
@@ -305,7 +379,8 @@ After each subsequent iteration:
 - If `plateau_broken` marker triggers (>5 bb/100 over best previous),
   pop it.
 - Apply the plateau / band-climb / overdue-climb rules from SKILL.md
-  Step 6 to decide whether to keep iterating or graduate to S6.
+  Step 6 to decide whether to keep iterating or graduate to the
+  5000-hand anytime-ready test.
 
 Three options at every iteration boundary, never more:
 
@@ -313,6 +388,39 @@ Three options at every iteration boundary, never more:
   • `go`        — one more iteration
   • `show me`   — read failure_report.txt myself
   • `stop`      — lock in current score
+```
+
+When plateau hits, offer the 2-option Arena picker again (`500` /
+`5000`) — most users have been on 500 the whole loop and want a
+5000-hand run to lock in their definitive number.
+
+---
+
+## Stage 4 close — the final tier (mention once at the end)
+
+When the user finishes Stage 4 (plateau hit OR they say `stop`),
+mention this once:
+
+```
+🌅 Beyond Stage 4 — solver / trained-weights territory.
+
+The Stage 4 HL loop ceiling is roughly -3 to +5 bb/100. To go higher,
+the industry approach is to **train your own neural net** or use a
+**post-flop solver** for canonical spots. Examples (open-source):
+
+  • Pluribus (CMU/Facebook, 2019) — first AI to beat human pros at
+    6-max NLHE. MCCFR self-play.
+  • DeepMind open_spiel — DeepCFR / NFSP / CFR+ implementations.
+  • rlcard — RL training framework with NFSP baselines.
+  • TexasSolver — open-source GTO post-flop solver. Bake lookup tables
+    into your decide().
+  • Slumbot — public NLHE HU bot, semi-open methods.
+  • PokerBench (Lin et al, Penn State 2025) — academic 6-max benchmark.
+
+We don't take you there in this kit — that's a ~1 week + GPU project.
+But the top of the Poker Arena leaderboard will be people doing
+exactly this. If you want to seriously compete, your roadmap is:
+this kit → train weights (or import solver tables) on top.
 ```
 
 ---
@@ -323,6 +431,8 @@ Three options at every iteration boundary, never more:
 - Explain bb/100 / scoring / variance up front (`learn` does that)
 - Skip the visible-artifact rule — even on quick path, the user sees
   STRATEGY.md content, research/ contents, and decide() diffs
-- Claim a score without running real Arena S5 (no fake numbers)
-- Run Arena previews (`--max-hands 50`) — only the full S5
-- Auto-graduate to S6 — that requires user opt-in after plateau
+- Claim a score without running a real Arena match (no fake numbers)
+- Run Arena previews (`--max-hands 50`) — only the full 500-hand or
+  5000-hand match
+- Auto-graduate to the 5000-hand test — that requires user opt-in
+  after plateau

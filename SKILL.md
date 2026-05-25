@@ -1,6 +1,6 @@
 ---
 name: arena-pokerkit
-version: 0.17.0
+version: 0.18.0
 description: Use this skill whenever the user wants to build, improve, register, or submit a poker bot to dev.fun Arena's Poker Eval benchmark. Trigger on "build a poker bot", "join poker eval", "improve my arena agent", "submit poker bot", "arena starter kit", "pokerkit", or any mention of the poker-eval arena. Handles cloning, installation, strategy elicitation, decide() editing, local self-play validation, Arena evaluation, replay analysis, and submission end-to-end. Asks the user only for strategy taste and submission approval; runs all build/test/run commands autonomously.
 license: MIT
 ---
@@ -49,42 +49,65 @@ license: MIT
   L3" in some older docs refer to *implementation tiers* (Heuristic /
   Runtime-LLM / Trained-weights), not the level ladder — always
   surface the ladder Level number when talking to the user.
+- **NEVER say "S5" or "S6" to the user.** The two competitions internally
+  are S5 (500 hands) and S6 (5000 hands), but those labels confuse
+  non-Arena-natives. Use **"500-hand quick test"** and **"5000-hand
+  anytime-ready test"** in all user-facing copy. The S5/S6 labels live
+  only in `references/`, `.env.example`, and this Rules block.
+- **Competition ID mapping** (use these when running Arena):
+  - `500-hand quick test` → `ARENA_COMPETITION_ID=cmpdk0pt00eawvcaf1es8plw2`
+  - `5000-hand anytime-ready test` → `ARENA_COMPETITION_ID=cmpkdus9200syw8do5644oymp`
+  Both share the same reference panel. Default is 500-hand.
+- **Beyond Stage 4 — final-tier mention.** Whenever the user finishes
+  Stage 4 (or asks "what's next after the HL loop?"), mention that
+  the road continues into solver / trained-weights territory and
+  name 2-3 open-source projects: **Pluribus** (CMU/Facebook 2019,
+  first AI to beat human pros at 6-max NLHE), **DeepMind open_spiel**
+  (DeepCFR / NFSP / CFR+ implementations), **rlcard** (DATA Lab RL
+  training), **TexasSolver** (open-source GTO post-flop solver),
+  **Slumbot** (Eric Jackson, HU NLHE), **PokerBench** (Penn State
+  2025 academic 6-max benchmark). This kit doesn't go there — that's
+  ~1 week + GPU. But the leaderboard top is people doing exactly
+  this. Don't gate it behind a milestone — just mention once at
+  Stage 4 close.
 
 ### Vocabulary — use these exact terms with the user
 
 - **`pokerkit run`** — a LOCAL CLI command that drives your agent client.
 - **Arena Poker Eval benchmark** — the SERVER-SIDE match against the
-  reference panel. Hand count depends on which season the user runs
-  (see "Arena seasons" below).
+  reference panel. Two competition sizes available (see below).
 - `pokerkit run` is the client that polls Arena and submits your
-  `decide()`'s actions. The hand count is fixed by Arena per season.
-  The client's `--max-hands` flag lets you stop the CLIENT early; the
-  SERVER-SIDE match stays open in `waiting_user` state and you can
-  resume by running `pokerkit run` again.
-- When talking to the user, never claim a specific hand count without
-  naming the season — say "Arena's S5 benchmark is 500 hands; pokerkit
-  run is the client that plays them" or just "the Arena benchmark" /
-  "your match".
+  `decide()`'s actions. The hand count is fixed by Arena per
+  competition. The client's `--max-hands` flag lets you stop the
+  CLIENT early; the SERVER-SIDE match stays open in `waiting_user`
+  state and you can resume by running `pokerkit run` again.
+- When talking to the user, name the competition size — say "the
+  500-hand quick test" or "the 5000-hand anytime-ready test", not
+  "S5" / "S6".
 
-### Arena seasons
+### Two Arena competition sizes (user-facing labels)
 
-- **S5 (Standard)** — 500 hands, ~15 min, ±20 bb/100 CI (raw). Default
-  season. Use for the HL loop. Daily leaderboard. The CI is wide
-  because Arena scoring is currently raw bb/100 with no variance
-  adjustment — close bots can't be reliably ranked apart at S5.
-- **S6 (Grand Championship)** — 5000 hands, ~2 hr, ±6 bb/100 CI (raw).
-  Definitive ranking. Use after you've tuned on S5. Same reference panel.
+- **500-hand quick test** — 500 hands, ~15 min, ±20 bb/100 CI (raw).
+  Default for build/iterate. Run after each HL-loop iteration to see
+  if your patch worked. CI is ~±20 bb/100 so close bots can tie —
+  use this for direction-checking, not for locking in your rank.
+  Maps to `competition_id = cmpdk0pt00eawvcaf1es8plw2` (internally S5).
+- **5000-hand anytime-ready test** — 5000 hands, ~2 hr, ±6 bb/100 CI
+  (raw). Run when you feel confident, want a tight CI on your real
+  ranking. Big enough to eliminate variance. Same reference panel.
+  Maps to `competition_id = cmpkdus9200syw8do5644oymp` (internally S6).
 - Future: Arena plans V2 all-in EV correction + V3 AIVAT, which will
   tighten CI ~3-10× at the same hand count. Until shipped, raw is what
   you get.
-- When surfacing scores, ALWAYS include CI: `+5.2 ± 20 bb/100` on
-  S5; `+5.2 ± 6 bb/100` on S6. Users need to see CI to know if their
-  rank vs neighbors is statistically meaningful.
+- When surfacing scores, ALWAYS include CI: `+5.2 ± 20 bb/100` on the
+  500-hand test; `+5.2 ± 6 bb/100` on the 5000-hand test. Users need
+  to see CI to know if their rank vs neighbors is statistically
+  meaningful.
 
 ### Locality rule — quick iteration is LOCAL, Arena is for real eval
 
 - **Quick iterations (5-200 hands) belong on `pokerkit selfplay`**,
-  not on Arena. The Arena benchmark is the FULL S5 (500-hand) match —
+  not on Arena. The Arena benchmark is the FULL 500-hand quick test —
   treat it as the real eval, not a sandbox. Use selfplay for fast
   direction checks; only run on Arena when you're ready to spend
   ~15 min on a real measurement.
@@ -190,7 +213,7 @@ differently. Read the matching path file in full before executing.
   - Tournament / Poker Arena prize talk → after `positive_vs_panel`
   - Researcher Track → after `plateau_broken`
   - Level ladder panel → after `beat_baseline`
-  - S6 graduation → after `plateau_broken`
+  - 5000-hand anytime-ready test → after `plateau_broken`
 
 Wait for any affirmative ("yes" / "ok" / "go" / "start" / "走" / "继续"
 / a thumbs-up / etc.) before proceeding. If the user asks clarifying
@@ -254,7 +277,7 @@ writes**: write to `.pokerkit-milestones.json.tmp` then `os.rename`.
 
 | id | Pretty name | Unlocks when |
 |---|---|---|
-| `first_arena_score` | First Arena Score | ★ first Arena S5 terminal state — the magic moment; usually fires inside Stage 1 or Stage 2 |
+| `first_arena_score` | First Arena Score | ★ first Arena terminal state (500-hand quick test) — the magic moment; usually fires inside Stage 1 or Stage 2 |
 | `beat_baseline` | Beat Baseline | Arena bb/100 beat the local baseline call-station / random reference |
 | `positive_vs_panel` | Positive bb/100 vs Panel | Arena bb/100 ≥ 0 — non-losing result vs the reference panel |
 | `plateau_broken` | Plateau Broken | improved >5 bb/100 over best previous Arena score (fires inside Stage 4) |
@@ -331,9 +354,9 @@ the run accordingly. **Do not blindly march through every Step below.**
    migration lands, `npx skills add devfun-org/devfun-arena-skills`
    will install it alongside the `devfun-arena` predictions skill.)
 2. `uv sync` — installs httpx, dotenv, treys, pokerkit into `.venv`
-3. `cp .env.example .env` — defaults to Poker Eval S5
-   (`cmpdk0pt00eawvcaf1es8plw2`). Leave `ARENA_API_KEY` blank; the
-   agent auto-registers on first run.
+3. `cp .env.example .env` — defaults to Poker Eval 500-hand quick
+   test (`cmpdk0pt00eawvcaf1es8plw2`, internally S5). Leave
+   `ARENA_API_KEY` blank; the agent auto-registers on first run.
 
 ## Step 1: Baseline (ACT)
 
@@ -391,22 +414,46 @@ Show the user the filled file once and ask for any tweaks.
 Record the new bb/100 as `new_local`. If `new_local < baseline_local`,
 revert your edit, ask the user to clarify STRATEGY, and retry.
 
-## Step 5: Arena benchmark (ASK — first run is S5 by default)
+## Step 5: Arena benchmark (ASK — first run is the 500-hand quick test by default)
 
 Reminder: don't run small Arena previews for iteration — that's what
 `pokerkit selfplay` is for. Step 5 is the **full Arena benchmark**
-(real opponents from the reference panel). Default is **S5 (500 hands, ~15 min)**;
-the user can opt into S6 (5000 hands, ~2 hr) once they plateau.
+(real opponents from the reference panel). Default is the **500-hand
+quick test** (~15 min); the user can opt into the **5000-hand
+anytime-ready test** (~2 hr) when they want a tight CI.
 
-> Local self-play: **{baseline_local} → {new_local}** bb/100 vs simple bots.
-> Ready to run the **Arena S5 benchmark** (500 hands, ~15 min, real reference panel)?
+Surface the 2-option picker (use this template, identical wording
+across all paths):
 
-[If yes — ACT:]
-   ./pokerkit run
+```
+🎯 Ready for Arena?
+
+You can pick either:
+
+  • 500-hand quick test   — fast feedback (~15 min). Run after each
+    HL iteration to verify patches. CI is ~±20 bb/100 so close bots
+    can tie; use this for direction-checking.
+
+  • 5000-hand anytime-ready test  — definitive ranking (~2 hr).
+    Sample is large enough to give ~±6 bb/100 CI. Use this when
+    you're confident, want a real leaderboard score.
+
+Most users do 500-hand a few times during HL loop, then one 5000-hand
+when they've plateaued and want the locked-in number.
+
+Pick: `500` / `5000`.
+```
+
+[If `500` — ACT:]
+   ./pokerkit run    # uses default ARENA_COMPETITION_ID=cmpdk0pt00eawvcaf1es8plw2
+
+[If `5000` — ACT:]
+   ARENA_COMPETITION_ID=cmpkdus9200syw8do5644oymp ./pokerkit run
 
 When it completes, **always** report the score using the 4-line
 "Score interpretation" template — and ALWAYS include the CI value
-(`±20 bb/100` for S5, `±6 bb/100` for S6, raw — no variance adjustment).
+(`±20 bb/100` for the 500-hand test, `±6 bb/100` for the 5000-hand
+test, raw — no variance adjustment).
 
 ## Step 6: Iterate or climb (ASK — one recommendation, not a menu)
 
@@ -450,18 +497,20 @@ Recommendation logic — pick ONE and surface it:
 
 ```
 Iteration tracking → recommendation:
-  Score < -20:                      "Pull failure report → patch → re-run S5."
-  Still climbing (delta >= +2):     "One more S5 round."
-  Plateaued on S5 (delta < +2 last 2 iters):
-                                    "You've tuned as far as S5 (±20 raw CI) can measure.
-                                     Graduate to S6 (5000 hands, ~2 hr) to lock in
-                                     your definitive ranking on the championship
-                                     leaderboard."
-  3 plateau iters in a row:         "Stop iterating on S5; run S6 to lock in."
+  Score < -20:                      "Pull failure report → patch → re-run the 500-hand quick test."
+  Still climbing (delta >= +2):     "One more 500-hand round."
+  Plateaued (delta < +2 last 2 iters):
+                                    "You've tuned as far as the 500-hand quick test
+                                     (±20 raw CI) can measure. Graduate to the
+                                     5000-hand anytime-ready test (~2 hr) to lock in
+                                     your definitive ranking with a tight ±6 CI."
+  3 plateau iters in a row:         "Stop iterating on the 500-hand test; run
+                                     the 5000-hand test to lock in."
 ```
 
-When the user says "go" after plateau, run S6 by setting
-`ARENA_COMPETITION_ID=cmpkdus9200syw8do5644oymp` (or `--competition-id cmpkdus9200syw8do5644oymp`).
+When the user says "go" after plateau, run the 5000-hand test by
+setting `ARENA_COMPETITION_ID=cmpkdus9200syw8do5644oymp` (or
+`--competition-id cmpkdus9200syw8do5644oymp`).
 
 The agent says explicitly:
 
@@ -543,9 +592,10 @@ point at Top Bots instead.
 
 On the FIRST Arena run, also include these 4 lines under the table:
 
-1. **Raw score**: `{bb/100} ± {CI_for_season} bb/100` over `{N}` hands ({season name}).
-   For S5 (500h): CI ≈ ±20. For S6 (5000h): CI ≈ ±6. Wide because
-   scoring is raw bb/100 with no variance adjustment (yet).
+1. **Raw score**: `{bb/100} ± {CI} bb/100` over `{N}` hands ({test name}).
+   For the 500-hand quick test: CI ≈ ±20. For the 5000-hand
+   anytime-ready test: CI ≈ ±6. Wide because scoring is raw bb/100
+   with no variance adjustment (yet).
 2. **What it means**: bb/100 = big blinds win/lose per 100 hands.
    Negative = losing money.
 3. **Why local ≠ Arena**: Local selfplay uses simple bots. Arena uses
@@ -553,10 +603,10 @@ On the FIRST Arena run, also include these 4 lines under the table:
    absolute numbers.
 4. **What ± {CI} means**: your true skill is within {CI} bb/100 of
    this number, 95% confidence. If your rank-neighbors' CIs overlap
-   yours, you can't tell who's actually better — graduate to S6
-   (±6 raw CI) to resolve. Arena plans V2 all-in EV correction +
-   V3 AIVAT, which will tighten these CIs 3-10× at the same hand
-   count, but neither has shipped yet.
+   yours, you can't tell who's actually better — graduate to the
+   5000-hand anytime-ready test (±6 raw CI) to resolve. Arena plans
+   V2 all-in EV correction + V3 AIVAT, which will tighten these CIs
+   3-10× at the same hand count, but neither has shipped yet.
 
 Subsequent Arena runs use the anchor table + a 1-line trajectory
 (`{prev_score} → {current_score} bb/100 ({+/-}{delta})`), no CI
@@ -566,6 +616,39 @@ If the score is negative, **don't frame it as failure**: "Negative
 score is normal vs the reference panel until you reach Stage 4. The
 curriculum loop's job is to find the patterns that lose chips and
 patch them."
+
+---
+
+## Beyond Stage 4 — solver / trained-weights territory
+
+When the user closes out Stage 4 (or asks "what's the ceiling?"),
+surface this once. Don't gate it behind a milestone — just mention it
+as the final tier the leaderboard top is built from.
+
+The Stage 4 HL loop ceiling is roughly **-3 to +5 bb/100** vs the
+reference panel. To go higher, the industry approach is to **train
+your own neural net** or use a **post-flop solver** for canonical
+spots. Examples (all open-source):
+
+- **Pluribus** (Facebook AI / CMU, 2019) — first AI to beat human pros
+  at 6-max NLHE. Used MCCFR self-play + AIVAT scoring. Methods paper
+  public, model not.
+- **DeepMind open_spiel** — includes DeepCFR, NFSP, CFR+
+  implementations. Trainable on 6-max NLHE with a GPU.
+- **rlcard** (DATA Lab) — RL training framework for poker, includes
+  6-max NLHE environments and NFSP baselines.
+- **TexasSolver** — open-source GTO post-flop solver. Pre-compute
+  optimal frequencies for canonical spots, bake the lookup table into
+  your bot.
+- **Slumbot** (Eric Jackson) — public NLHE HU bot, semi-open methods.
+  HU-only but worth studying.
+- **PokerBench** (Lin et al, Penn State 2025) — academic 6-max NLHE
+  benchmark, useful for comparing your bot.
+
+This kit doesn't take you there — that's a ~1-week + GPU project. But
+the top of the Poker Arena leaderboard will be people doing exactly
+this. If you want to seriously compete, your roadmap is: this kit →
+train weights (or import solver tables) on top.
 
 ---
 
@@ -618,8 +701,8 @@ the claim flow is optional, not required to play or be scored.
 | Edit `examples/agent.py decide()` | ✓ | |
 | Run `pokerkit analyze` | ✓ | |
 | Run `pokerkit run --max-hands 50` (Arena preview) | | ✓ (user time + API) |
-| Run `pokerkit run` (S5: 500 hands, ~15 min) | | ✓ (real eval) |
-| Run `pokerkit run` (S6: 5000 hands, ~2 hr) | | ✓ (championship) |
+| Run `pokerkit run` (500-hand quick test, ~15 min) | | ✓ (real eval) |
+| Run `pokerkit run` (5000-hand anytime-ready test, ~2 hr) | | ✓ (definitive) |
 | Strategy style | | ✓ (taste) |
 | Surface bb/100 verdict | ✓ | |
 | Modify files outside `examples/`, `assets/`, root config | ✗ | |

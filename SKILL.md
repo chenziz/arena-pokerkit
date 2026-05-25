@@ -1,6 +1,6 @@
 ---
 name: arena-pokerkit
-version: 0.18.3
+version: 0.18.4
 description: Use this skill whenever the user wants to build, improve, register, or submit a poker bot to dev.fun Arena's Poker Eval benchmark. Trigger on "build a poker bot", "join poker eval", "improve my arena agent", "submit poker bot", "arena starter kit", "pokerkit", or any mention of the poker-eval arena. Handles cloning, installation, strategy elicitation, decide() editing, local self-play validation, Arena evaluation, replay analysis, and submission end-to-end. Asks the user only for strategy taste and submission approval; runs all build/test/run commands autonomously.
 license: MIT
 ---
@@ -372,31 +372,68 @@ default, and the `./` shell wrapper adds an extra layer of suspicion.
 
 **Surface this to the user BEFORE running anything**, so they have
 context when the prompt appears. Paste (or paraphrase in the user's
-language) the block below verbatim:
+language) the block below verbatim.
+
+> **Source of truth.** The canonical full text lives in
+> `references/permissions.md`. This block is a synced copy — if you
+> edit anything here, mirror the change there too (and to
+> `paths/quick.md`, `paths/guided.md`, `README.md`). Other agents
+> reading this skill should treat `references/permissions.md` as the
+> editable source.
 
 ```
 💡 Heads-up — your sandbox may ask permission for the first few
 commands I run in this repo. That's normal because the kit is new to
-your agent. Two things to know:
+your agent. Three things to know:
 
-  1. The kit only runs local Python on your machine. No network calls
-     except during Stage 3+ (Arena evaluation), which you explicitly
-     approve before I start.
+  1. Local-only Python. The kit installs and runs Python on your
+     machine. There are exactly two network steps:
+       - One-time: `uv sync` downloads Python packages from PyPI
+         (~30 seconds, ~50MB). Standard package install.
+       - Per Arena run (Stage 3+ only, you explicitly approve before
+         I start): API calls to b-arena.dev.fun for the benchmark.
+     Everything else (selfplay, tests, code edits) is pure local
+     Python — no network.
+
   2. One-time grant is enough. Once you approve, all subsequent
      commands work without prompting.
+
+  3. Pre-grant options (per agent):
+       - Claude Code: copy .claude/settings.json.example to
+         .claude/settings.json before we start. Allowlists the exact
+         commands the kit needs (git clone, uv sync, ./pokerkit, etc).
+       - Codex CLI: copy .codex/config.toml.example to
+         ~/.codex/config.toml, OR just approve the workspace once
+         when prompted — Codex auto-adds it to its trusted list.
+       - Cursor / Aider / Windsurf / Continue: approve when prompted
+         on first run. Each tool has its own per-workspace dialog.
 
 If your sandbox gives you options like "approve once / add permission
 rule / hand off" — pick **approve** (one-time is fine; "add rule" is
 also fine and more permanent). Don't pick "hand off" — that defeats
 the whole point of me driving for you.
-
-Pre-grant option: if you'd rather skip the prompts entirely, copy
-.claude/settings.json.example to .claude/settings.json before we
-start. That allowlists the exact commands the kit needs.
 ```
 
 If the user is non-English, translate inline (the rules for global
 language matching apply here too).
+
+#### Read-only sandbox fallback (Phase 1 `cp .env.example .env`)
+
+Some sandboxes (notably Codex CLI strict read-only mode) can't write
+`.env`. The kit works without one — just export env vars directly:
+
+```bash
+# Setup (writeable sandbox — default):
+cp .env.example .env
+
+# Setup (read-only sandbox — Codex strict mode):
+export ARENA_API_BASE=https://b-arena.dev.fun/api/arena
+export ARENA_COMPETITION_ID=cmpdk0pt00eawvcaf1es8plw2
+```
+
+If `cp` is blocked or `.env` write fails (EROFS / EACCES), fall back
+to the `export` form silently and tell the user once: *"Your sandbox
+is read-only; I'm using env vars instead of a .env file. Same effect."*
 
 ### Wrapper-less command form
 
@@ -430,6 +467,10 @@ forms produce identical output.
 3. `cp .env.example .env` — defaults to Poker Eval 500-hand quick
    test (`cmpdk0pt00eawvcaf1es8plw2`, internally S5). Leave
    `ARENA_API_KEY` blank; the agent auto-registers on first run.
+   If `cp` is blocked or the FS is read-only (Codex strict mode),
+   skip the `.env` write and `export ARENA_API_BASE=https://b-arena.dev.fun/api/arena`
+   + `export ARENA_COMPETITION_ID=cmpdk0pt00eawvcaf1es8plw2` instead
+   — same effect. See `references/permissions.md`.
 
 ## Step 1: Baseline (ACT)
 
@@ -789,6 +830,13 @@ or taste-driven** (strategy choice, full submission, time budget).
 
 ## Reference files (read on demand)
 
+- `references/permissions.md` — **canonical** first-run permission
+  heads-up + Codex/Claude pre-grant options + read-only sandbox
+  fallback + wrapper-less command table. Edit point for any
+  permission wording change. SKILL.md / paths / README quote from
+  this file.
+- `references/output-parsing.md` — how to grep `pokerkit selfplay`
+  output for `baseline_local` bb/100 (exact line format, regex).
 - `references/optimization-levels.md` — the 6-level ladder; what each
   level adds, expected bb/100 lift, time/cost commitment, how to
   pace iterations. **Read this when the user asks about levels or

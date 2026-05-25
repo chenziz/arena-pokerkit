@@ -2,6 +2,59 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.18.4] — 2026-05-25 — "Multi-agent fresh test fixes — heads-up ordering, settings.json gaps, codex path, source-of-truth"
+
+3 fresh-agent tests (Claude Code simulator, Codex simulator, real
+Codex CLI) ran v0.18.3 and surfaced 8 friction points. This release
+closes all of them.
+
+### Fixed — first-run friction
+
+- **Permission heads-up now inlined in `paths/quick.md` + `paths/guided.md`
+  Phase 1 prologue**, not blockquote-linked. Previously fast-mode agents
+  skipped it and hit a sandbox prompt unannounced.
+- **`.claude/settings.json.example` allowlist expanded** to include
+  `Bash(git clone:*)`, `Bash(cd:*)`, `Bash(cp:*)`, `Bash(mkdir:*)`,
+  `Bash(uv sync:*)` — Phase 1 setup commands. Pre-grant now actually
+  pre-grants the whole flow.
+- **AGENTS.md Codex path corrected**: `~/.codex/trust-list` was wrong;
+  real path is `~/.codex/config.toml` with `[projects]` table OR
+  per-workspace approval on first run.
+- **SKILL.md heads-up now includes Codex pre-grant guidance** alongside
+  Claude Code, with optional ship of `.codex/config.toml.example`.
+
+### Added — source-of-truth + new references
+
+- **`references/permissions.md`** is the canonical single-source for
+  permission text. SKILL.md / paths / README now quote-reference it.
+  Previously 4 copies would have drifted.
+- **`references/output-parsing.md`** documents exact `selfplay` /
+  `analyze` / `run` output formats so agents can scrape values
+  reliably. (Test #3 flagged `baseline_local` parsing was underspecified.)
+- **`.codex/config.toml.example`** — Codex CLI trust template, parallel
+  to `.claude/settings.json.example`.
+
+### Fixed — honest network claims
+
+- SKILL.md previously said "no network calls except Arena." Updated to
+  acknowledge `uv sync` (one-time, ~30s, ~50MB from PyPI) is the
+  exception. Everything else is local Python.
+
+### Fixed — read-only sandbox support
+
+- `cp .env.example .env` fails in read-only sandboxes (Codex strict
+  mode). Phase 1 now offers an ENV-var alternative
+  (`export ARENA_API_BASE=...`) for read-only environments.
+
+### Verified
+
+- 34/34 pytest tests pass (no code changes, pure markdown + config).
+- `./pokerkit version` reports `0.18.4`.
+- `.claude/settings.json.example` covers all Phase 1 commands.
+- `.codex/config.toml.example` exists in repo.
+- `references/permissions.md` exists as single source; paths + SKILL +
+  README all reference it.
+
 ## [0.18.3] — 2026-05-25 — "First-Run Permission Heads-up — friction fix from real user testing"
 
 A real user (fresh Claude Code agent on a brand-new clone) hit sandbox

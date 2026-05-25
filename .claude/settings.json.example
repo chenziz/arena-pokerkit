@@ -6,10 +6,19 @@
       "Bash(uv sync:*)",
       "Bash(uv pip:*)",
       "Bash(python -m pytest:*)",
+      "Bash(python3 -m pytest:*)",
+      "Bash(git clone:*)",
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",
+      "Bash(cd:*)",
+      "Bash(cp:*)",
+      "Bash(mkdir:*)",
       "Bash(cat .arena-credentials:*)",
+      "Bash(cat .arena-poker-state:*)",
+      "Bash(cat .pokerkit-milestones.json:*)",
+      "Bash(cat STRATEGY.md:*)",
+      "Bash(cat failure_report.txt:*)",
       "Read(./*)"
     ]
   }

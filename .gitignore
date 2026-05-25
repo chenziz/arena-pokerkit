@@ -50,3 +50,8 @@ htmlcov/
 .claude/*
 !.claude/settings.json.example
 !.claude/settings.json.example.README
+
+# Codex CLI per-user config (.example is committed)
+.codex/config.toml
+!.codex/config.toml.example
+!.codex/config.toml.example.README

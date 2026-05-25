@@ -1,12 +1,10 @@
 # Path: quick — "I drive all 4 stages, you approve at boundaries"
 
-> 💡 First time? Your agent's sandbox may ask permission for shell
-> commands in this repo — say yes (it's local-only Python; the only
-> network call is Arena evaluation, which you approve before it
-> happens). Once is enough. See SKILL.md "Permission heads-up" or
-> README.md "First-run permissions" for details. Both `./pokerkit
-> <verb>` and `uv run python examples/<script>.py` work — pick
-> whichever your sandbox prefers.
+> **Permission heads-up source:** the canonical full text lives in
+> `references/permissions.md`. The short block in Phase 1 below is a
+> 5-line synced copy. If you edit, mirror to SKILL.md, guided.md, and
+> README.md. **DO NOT EDIT inline copies in isolation — sync from
+> references/permissions.md.**
 
 > Loaded when the user replies `quick` to the SKILL.md first-contact
 > greeting. The goal: walk the user through the **4-stage progression**
@@ -38,9 +36,31 @@ Three or fewer options on any ASK. Never dump the level ladder up front.
 
 ---
 
-## Phase 1 — Setup (ACT, silent except final line)
+## Phase 1 — Setup (ACT, silent except permission heads-up + final summary)
 
-Run, in order:
+**Step 1 — surface the permission heads-up FIRST, before any command.**
+Even on quick path, this is non-negotiable: a sandbox prompt that
+arrives unannounced confuses the user. Paste this block (translate
+inline if non-English) and wait one beat before running anything:
+
+```
+💡 Heads-up — your sandbox may prompt on the first few commands.
+That's normal. The kit only runs local Python on your machine. Two
+network steps you should know about:
+  1. `uv sync` (Phase 1, one-time) — downloads Python deps from PyPI
+     (~30 sec, ~50MB). Standard package install.
+  2. Arena evaluation (Stage 3+, you approve each time) — calls
+     b-arena.dev.fun for the benchmark.
+Everything else is pure local Python. One-time approve is enough.
+
+Pre-grant if you'd rather skip prompts:
+  • Claude Code: cp .claude/settings.json.example .claude/settings.json
+  • Codex CLI:   cp .codex/config.toml.example ~/.codex/config.toml
+                 (or approve workspace once when Codex asks)
+Full version: references/permissions.md.
+```
+
+**Step 2 — silent setup.** After the heads-up is on screen, run, in order:
 
 ```bash
 # if not already inside the repo:
@@ -48,7 +68,9 @@ git clone https://github.com/chenziz/arena-pokerkit
 cd arena-pokerkit
 
 uv sync
-cp .env.example .env
+cp .env.example .env             # if read-only sandbox, skip this and
+                                  # export ARENA_API_BASE + ARENA_COMPETITION_ID
+                                  # directly (see references/permissions.md)
 ./pokerkit selfplay --hands 200 --seed 42   # local baseline number
 # OR equivalent (sandbox-friendly):
 # uv run python examples/selfplay.py --hands 200 --seed 42
@@ -62,7 +84,10 @@ Repo ready. Baseline against local bots: {baseline_local} bb/100.
 ```
 
 Local baseline number from `selfplay` goes into the iteration history
-as `baseline_local`. Do not invent an Arena number here.
+as `baseline_local`. Do not invent an Arena number here. Parse the
+selfplay output for the `  bb/100      : +XX.X` line in the final
+summary block (regex `^\s*bb/100\s*:\s*([+-]?\d+(?:\.\d+)?)`). Full
+output-parsing reference: `references/output-parsing.md`.
 
 ---
 

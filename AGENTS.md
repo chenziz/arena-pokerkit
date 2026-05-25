@@ -139,9 +139,12 @@ approves.
   `.claude/settings.json` to pre-approve `./pokerkit`, `uv run`,
   `pytest`, and basic `git` introspection. Or approve when prompted —
   one-time grant is enough.
-- **Codex CLI**: uses its own trust mechanism (typically
-  `~/.codex/trust-list` or per-workspace allowlist). Approve the
-  workspace on first run.
+- **Codex CLI**: trust is managed in `~/.codex/config.toml` (under
+  the `[projects]` table) OR via per-workspace approval on first run.
+  Run `codex` once in this repo and approve when asked — Codex
+  auto-adds this workspace to its trusted list. To pre-grant, copy
+  `.codex/config.toml.example` to `~/.codex/config.toml` (merge with
+  any existing config).
 - **Cursor**: Settings → "Allow Workspace" for this repo.
 - **Aider / Continue / Windsurf / others**: each has its own prompt;
   approve on first run.

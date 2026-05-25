@@ -1,12 +1,10 @@
 # Path: guided — "Walk me through it, I want to participate"
 
-> 💡 First time? Your agent's sandbox may ask permission for shell
-> commands in this repo — say yes (it's local-only Python; the only
-> network call is Arena evaluation, which you approve before it
-> happens). Once is enough. See SKILL.md "Permission heads-up" or
-> README.md "First-run permissions" for details. Both `./pokerkit
-> <verb>` and `uv run python examples/<script>.py` work — pick
-> whichever your sandbox prefers.
+> **Permission heads-up source:** the canonical full text lives in
+> `references/permissions.md`. The short block in Phase 1 below is a
+> 5-line synced copy. If you edit, mirror to SKILL.md, quick.md, and
+> README.md. **DO NOT EDIT inline copies in isolation — sync from
+> references/permissions.md.**
 
 > Loaded when the user replies `guided` to the SKILL.md first-contact
 > greeting. Same 4-stage progression as `quick.md`, but **the user
@@ -40,10 +38,33 @@ themselves.
 
 ---
 
-## Phase 1 — Setup (ACT, narrated)
+## Phase 1 — Setup (ACT, narrated — permission heads-up FIRST)
 
-Run the same setup commands as `paths/quick.md`. While they run, drop
-**one sentence each** about what's happening:
+**Step 1 — surface the permission heads-up FIRST, before any command.**
+The guided path is more conversational than quick, but the heads-up
+ordering rule is the same: a sandbox prompt that arrives unannounced
+confuses the user. Paste this (translate inline if non-English):
+
+```
+💡 Heads-up — your sandbox may prompt on the first few commands.
+That's normal. The kit only runs local Python on your machine. Two
+network steps you should know about:
+  1. `uv sync` (Phase 1, one-time) — downloads Python deps from PyPI
+     (~30 sec, ~50MB). Standard package install.
+  2. Arena evaluation (Stage 3+, you approve each time) — calls
+     b-arena.dev.fun for the benchmark.
+Everything else is pure local Python. One-time approve is enough.
+
+Pre-grant if you'd rather skip prompts:
+  • Claude Code: cp .claude/settings.json.example .claude/settings.json
+  • Codex CLI:   cp .codex/config.toml.example ~/.codex/config.toml
+                 (or approve workspace once when Codex asks)
+Full version: references/permissions.md.
+```
+
+**Step 2 — narrated setup.** Run the same setup commands as
+`paths/quick.md`. While they run, drop **one sentence each** about
+what's happening:
 
 - `git clone` — *"Pulling the kit. Thin Python wrapper around
   Arena's API plus 3 reference `decide()` implementations."*
@@ -52,6 +73,13 @@ Run the same setup commands as `paths/quick.md`. While they run, drop
 - `./pokerkit selfplay --hands 200` — *"200 hands vs tight-passive
   local bots. NOT the Arena panel — just a fast sanity check that
   your bot plays legal poker."*
+
+If `cp .env.example .env` fails (read-only sandbox / Codex strict
+mode), skip the `.env` file and `export ARENA_API_BASE=https://b-arena.dev.fun/api/arena`
++ `export ARENA_COMPETITION_ID=cmpdk0pt00eawvcaf1es8plw2` instead.
+Tell the user once: *"Your sandbox is read-only; using env vars
+instead of .env. Same effect."* Full text:
+`references/permissions.md`.
 
 Print:
 

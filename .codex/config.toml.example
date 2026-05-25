@@ -1,0 +1,28 @@
+# Codex CLI config example — trust this workspace so Codex doesn't
+# prompt for permission on the kit's standard commands.
+#
+# Copy this file to ~/.codex/config.toml (Codex CLI reads it from
+# there). Merge with any existing config — do NOT clobber.
+#
+#   cp .codex/config.toml.example ~/.codex/config.toml
+#
+# Or just approve the workspace once when Codex prompts on first run.
+# Codex auto-adds this directory to its trusted list after one approval.
+
+[projects]
+
+# Trust the arena-pokerkit workspace for the kit's standard commands.
+# Adjust the path key if you cloned to a different location.
+"${HOME}/arena-pokerkit" = { trust = "trusted" }
+
+# Allowed commands the kit needs (Phase 1 setup + iteration loop):
+#   git clone, cd, cp, mkdir
+#   uv sync, uv run, uv pip
+#   ./pokerkit (test, selfplay, run, analyze, replay, version)
+#   python -m pytest
+#
+# Network calls the kit makes:
+#   - uv sync   → PyPI (one-time, Phase 1 setup, ~50MB)
+#   - pokerkit run → b-arena.dev.fun API (per Arena run, you approve)
+#
+# Everything else is pure local Python.

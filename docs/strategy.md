@@ -63,7 +63,7 @@ def decide(table, deadline_s=10.0, research_context=None):
 
 **Expected performance**: beats `Anchor-Fold`, `Anchor-RandomA/B`, often
 beats `Anchor-CheckCall`. Loses to `Bot-PokerKit-MC`, all LLM agents,
-and the DeepCFR reference panel.
+and the reference panel.
 
 **Prompt to give a coding agent if you want a stronger L1**:
 

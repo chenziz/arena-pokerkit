@@ -39,7 +39,7 @@ cost varies by model + harness + token volume.
 4. SELFPLAY     ./pokerkit selfplay --hands 200 --seed 42  (~1 s)
                 → compare bb/100 vs previous run
 5. ARENA        ./pokerkit run --max-hands 50              (~3-5 min)
-                → real bb/100 vs DeepCFR panel
+                → real bb/100 vs reference panel
 6. ANALYZE      ./pokerkit analyze --out failure_report.txt
                 → which positions/hands lost the most chips?
 7. LOOP         feed failure_report.txt back to coding agent → step 2
@@ -79,7 +79,7 @@ require a runtime LLM.
 
 ## When HL stops being enough
 
-The HL ceiling is around `+5 to +10 bb/100` vs the DeepCFR panel —
+The HL ceiling is around `+5 to +10 bb/100` vs the reference panel —
 strong but not solver-level. To go higher, you need one of:
 
 1. **Level 5 with research context.** Pass GTOWizard / TexasSolver
@@ -99,7 +99,7 @@ territory. HL is enough to be competitive in the top quartile.
 A typical HL session looks like:
 
 ```
-iter 0  baseline (L1 default)        -12.3 bb/100  vs DeepCFR
+iter 0  baseline (L1 default)        -12.3 bb/100  vs panel
 iter 1  add OPENING_RANGES            -4.1
 iter 2  add board-texture cbet        +1.8
 iter 3  add opponent HUD adjustment   +5.2

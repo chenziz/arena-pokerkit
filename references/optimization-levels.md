@@ -5,11 +5,11 @@ six progressively stronger bots**, each building on the previous.
 Pick how far you want to climb. Most users stop at Level 3-4. The
 top of the leaderboard usually lives at Level 5-6.
 
-Each level has: an expected bb/100 vs the DeepCFR reference panel,
+Each level has: an expected bb/100 vs the reference panel,
 the time cost to reach it, and what code changes it adds.
 
 ```
-Level  Name                       vs DeepCFR    Time         Money     Builds on
+Level  Name                       vs panel    Time         Money     Builds on
 ─────  ─────────────────────────  ────────────  ───────────  ────────  ─────────
   1    Baseline                     -15 to -5    0 min        $0        (start)
   2    Strategy-Guided              -5 to 0      ~20 min      $0        Level 1
@@ -33,7 +33,7 @@ pot-odds + simple equity heuristic. No strategy customization.
 **Verdict.** Gets you on the leaderboard but not far up.
 
 **Use case.** Sanity-check the loop works end-to-end. Confirm the
-DeepCFR panel is the opponent you're facing.
+reference panel is the opponent you're facing.
 
 **When you're done at this level.** As soon as one Arena run
 completes with a score in the -15..-5 band, Level 1 has done its job
@@ -125,7 +125,7 @@ preview time).
 positive territory.
 
 **Why it works.** You're now playing against THIS specific opponent
-panel, not just generic heuristics. The DeepCFR panel has exploitable
+panel, not just generic heuristics. The reference panel has exploitable
 patterns; finding and exploiting them is what this loop does.
 
 **Reference.** `references/heuristic-learning.md` for the philosophy.

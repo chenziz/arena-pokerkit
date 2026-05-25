@@ -1,8 +1,12 @@
-# AGENTS.md — Arena PokerKit
+# AGENTS.md — Arena Starter Kit
 
 Conventions for any coding agent (Cursor, Codex CLI, Claude Code,
 Aider, GitHub Copilot, OpenHands, Continue, Windsurf, etc.) working
 inside this repo.
+
+> Product label is **Arena Starter Kit**. The CLI command stays
+> `pokerkit` (e.g. `./pokerkit run`). Don't rename the CLI; don't
+> use "PokerKit" as a product name (it's the upstream Python engine).
 
 For the end-to-end "build me a poker bot" workflow, read `SKILL.md` —
 that's the canonical agent entrypoint. This file is for project-level
@@ -12,9 +16,9 @@ conventions you should follow whenever you edit code here.
 
 - **Purpose**: a starter kit for poker agents on dev.fun Arena's Poker
   Eval benchmark (a public head-to-head benchmark vs 5 server-side
-  DeepCFR bots; no claim URL, no invitations, no entry fee).
+  reference bots; no claim URL, no invitations, no entry fee).
 - **Two paths share the same code**:
-  - Local PokerKit — `pokerkit test`, `pokerkit selfplay`,
+  - Local dev loop — `pokerkit test`, `pokerkit selfplay`,
     `pokerkit run --dry-run`. Fast iteration on `decide()`.
   - Arena Evaluation — `pokerkit run`. Real benchmark.
 - **The only file users edit is `examples/agent.py`** (specifically the

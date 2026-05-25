@@ -1,12 +1,17 @@
-# Arena PokerKit
+# Arena Starter Kit
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-3776ab)](pyproject.toml)
-[![Version](https://img.shields.io/badge/version-0.10.0-success)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.15.0-success)](CHANGELOG.md)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/chenziz/arena-pokerkit/blob/main/examples/colab/quickstart.ipynb)
 
 Build a poker agent for dev.fun Arena. Register, introspect, start a
 benchmark, poll pending actions, submit legal actions.
+
+> **Naming.** The product is **Arena Starter Kit**. The CLI binary
+> stays `pokerkit` (so `./pokerkit run` still works). "PokerKit" by
+> itself is the name of the upstream Python poker engine
+> (`prinai/pokerkit`) that we depend on — not this product.
 
 ![demo](docs/demo.gif)
 
@@ -47,17 +52,17 @@ have to run them yourself — the skill tells your agent what to run.
 
 ## Two paths — pick the right one for the job
 
-| | **Local PokerKit** | **Arena Evaluation** |
+| | **Local dev loop** | **Arena Evaluation** |
 |---|---|---|
-| **Purpose** | Fast iteration on `decide()` while developing | Real benchmark — scores against the DeepCFR reference panel |
+| **Purpose** | Fast iteration on `decide()` while developing | Real benchmark — scores against Arena's reference panel |
 | **Speed** | 50 ms (unit tests) — 1 s per 200 hands (self-play) | 3-5 min (50 hands) — 30-40 min (full 500-hand match) |
 | **Network** | None | Live Arena API |
-| **Opponent** | Simple heuristic bots (tight/loose/random) | 5 server-side DeepCFR bots |
+| **Opponent** | Simple heuristic bots (tight/loose/random) | 5 server-side reference bots from dev.fun |
 | **When to use** | Every time you edit `decide()`. Cheap, fast, no API limits. | When you want a real bb/100 score on the leaderboard. |
 | **Commands** | `pokerkit test`, `pokerkit selfplay`, `pokerkit run --dry-run` | `pokerkit run` (Python shortcut) **or** Claude Code reading [`/skills/arena.md`](https://b-arena.dev.fun/skills/arena.md) (official path) |
 
 Develop locally, evaluate on Arena. Final 500-hand runs always go through
-Arena — that's the only place the DeepCFR panel exists.
+Arena — that's the only place the reference panel exists.
 
 ## Quick start
 
@@ -161,7 +166,7 @@ tests/test_user_decide_example.py ← copy this and unit-test YOUR decide()
 ## How it works
 
 Your agent runs a Poker Eval Benchmark match against a reference panel
-of server-side bots. It calls seven Arena endpoints, in this order:
+of server-side reference bots. It calls seven Arena endpoints, in this order:
 
   1. `POST /api/arena/auth/register`            → get an API key
   2. `GET  /api/arena/agent/me`                 → verify cached creds
@@ -194,7 +199,7 @@ approaches: heuristic, LLM-in-the-loop, and trained weights.
 |------|----------|------|-------|
 | L1 | Heuristic | 1 hour | pot odds + outs + EV rules |
 | L2 | LLM-in-the-loop | 1 day | Anthropic / OpenAI / any OpenAI-compat (OpenRouter / Together / Groq / vLLM) decides each spot |
-| L3 | Trained weights | 1 week + GPU | DeepCFR, CFR+, NFSP, solver lookup |
+| L3 | Trained weights | 1 week + GPU | CFR+, NFSP, deep-CFR style, solver lookup |
 
 These are **implementation tiers** of `decide()`. The **user-facing
 6-level optimization ladder** (Levels 1–6) lives in

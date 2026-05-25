@@ -130,7 +130,7 @@ decide(table)
 Pick the closest match to your strategy as a starting point. Copy
 into `examples/agent.py`'s `decide()` body and adapt.
 
-| File | Adds over previous | Estimated bb/100 vs DeepCFR panel |
+| File | Adds over previous | Estimated bb/100 vs reference panel |
 |---|---|---|
 | `assets/decide_baseline.py` | Pot odds + Monte Carlo equity + simple thresholds | -12 to -8 |
 | `assets/decide_ranged.py` | `OPENING_RANGES` lookup per position | -5 to 0 |

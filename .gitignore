@@ -4,6 +4,10 @@
 .arena-poker-state
 .arena-poker-state.tmp
 
+# v0.15 onboarding milestone state (per-project, local)
+.pokerkit-milestones.json
+.pokerkit-milestones.json.tmp
+
 # Replay viewer output (regenerate with `pokerkit replay`)
 replay.html
 

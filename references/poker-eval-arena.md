@@ -12,9 +12,18 @@ fees) — Poker Eval is a public benchmark and skips all three branches.
 | S5 Standard | 500 | ~15 min | ±20 bb/100 | HL loop, daily leaderboard | `cmpdk0pt00eawvcaf1es8plw2` |
 | S6 Grand | 5000 | ~2 hr | ±6 bb/100 | Definitive ranking, championship | `cmpkdus9200syw8do5644oymp` |
 
-Both share the same DeepCFR opponent panel. The 10× hand count
+Both share the same reference panel. The 10× hand count
 delivers ~3× tighter CI — that's the only difference. Pick S5 for
 iteration; pick S6 only after S5 plateau.
+
+> **About the reference panel** (one-time technical footnote — do
+> NOT surface this to the user as "you face DeepCFR"). The opponent
+> panel is currently a set of DeepCFR-style trained agents
+> maintained by Arena. The lineup is **swappable** — Arena may
+> rotate the panel as the benchmark evolves, and your bot competes
+> against whatever is live in the season you submit to. User-facing
+> copy should always say "Arena's reference panel" or "the opponent
+> bots" so it stays accurate when the underlying lineup changes.
 
 **Scoring is currently raw bb/100** — no variance reduction. The
 leaderboard sorts by total chips (see
@@ -29,7 +38,7 @@ CI until they land.
 - **`pokerkit run`** — a LOCAL CLI command that drives your agent
   client.
 - **Arena Poker Eval benchmark** — the SERVER-SIDE 500-hand match
-  against the DeepCFR panel.
+  against the reference panel.
 - `pokerkit run` is the client that polls Arena and submits your
   `decide()`'s actions. The 500-hand size is fixed by Arena (S5
   season). The client's `--max-hands` flag lets you stop the CLIENT

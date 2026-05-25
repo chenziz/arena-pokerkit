@@ -1,5 +1,10 @@
 # Path: learn — "explain Arena scoring + how the bot works first"
 
+> **First-turn handshake first.** Even on `learn`, surface the scope
+> handshake from `SKILL.md` once before any tool call. `learn` is
+> read-only — but the handshake is still a one-time gate. After the
+> user affirms, proceed to Section 1 below.
+
 > Loaded when the user replies `learn` (or `tell me more` / `explain`
 > / `详细` / `more`) to the SKILL.md first-contact greeting. The goal
 > is **not** a comprehensive tutorial — that's decision paralysis.

@@ -1,5 +1,15 @@
 # Path: quick — "I drive all 4 stages, you approve at boundaries"
 
+> **First-turn handshake required.** Before any tool call in this
+> path, surface the scope handshake from `SKILL.md` ("👋 Before I
+> start — quick scope check…") and wait for affirmative. The
+> handshake is a ONE-TIME gate on first contact; do not repeat it on
+> subsequent turns within the same session.
+
+> **Pre-action confirm required before each Arena run.** Use the
+> "About to register and play {500|5000} hands…" template from
+> `SKILL.md`. Per-action, not session-wide.
+
 > **Permission heads-up source:** the canonical full text lives in
 > `references/permissions.md`. The short block in Phase 1 below is a
 > 5-line synced copy. If you edit, mirror to SKILL.md, guided.md, and

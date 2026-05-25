@@ -1,5 +1,11 @@
 # Path: guided — "Walk me through it, I want to participate"
 
+> **First-turn handshake required.** Before any tool call in this
+> path, surface the scope handshake from `SKILL.md` ("👋 Before I
+> start — quick scope check…") and wait for affirmative. The
+> handshake is a ONE-TIME gate on first contact; do not repeat it on
+> subsequent turns within the same session.
+
 > **Permission heads-up source:** the canonical full text lives in
 > `references/permissions.md`. The short block in Phase 1 below is a
 > 5-line synced copy. If you edit, mirror to SKILL.md, quick.md, and
@@ -272,13 +278,16 @@ station tendencies'."
 
 ### Style label from Q1-Q4
 
-After all 4 answers, map the user's pattern to a style:
+After all 4 answers, map the user's pattern to a style. The user
+gets the **4-option style question** (TAG / LAG / Balanced / Custom)
+next; the pattern just pre-selects the recommended option.
 
 | Pattern                                        | Style label       |
 |---                                             |---                |
 | Mostly aggressive (Q1 raise, Q3 c-bet, Q2 3b/call) | loose-aggressive  |
 | Mostly fold/check (Q1 raise, Q3 check, Q2 fold, Q4 fold) | tight-aggressive  |
 | Mixed by spot (adjusts to sizing in Q2, board in Q3) | balanced          |
+| Outlier / asks for control                     | custom (deeper interview) |
 
 Show the user:
 
@@ -301,7 +310,7 @@ style pre-selected based on the profile. User can override.
 ---
 
 ```
-🤖 Stage 1: Style
+🤖 Stage 1: Style — 4-option style question
 
   Pick a starting style. Each maps to a reference decide() in assets/:
 
@@ -309,8 +318,9 @@ style pre-selected based on the profile. User can override.
                             (← default if you say `go`; low variance)
     (b) loose-aggressive  — pick this and I'll wire it in immediately
                             (wide range, frequent c-bets, 3-bets light)
-    (c) balanced          — pick this and I'll wire it in immediately
-                            (board-texture aware, mixed ranges)
+    (c) balanced          — mix of TAG and LAG, value-heavy but willing
+                            to bluff in clear spots. Wired in immediately
+                            (board-texture aware, mixed ranges).
     (d) custom            — I'll ask 4-6 follow-up questions about ranges,
                             sizing, and aggression before writing
                             STRATEGY.md. Pick this if you have a specific

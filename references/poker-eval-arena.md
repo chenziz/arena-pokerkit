@@ -1,5 +1,12 @@
 # Poker Eval Arena — endpoint reference
 
+> **Network policy:** `b-arena.dev.fun` (beta) and `arena.dev.fun`
+> (prod) are the **ONLY** Arena hosts this skill is allowed to call.
+> Plus `pypi.org` for install, `github.com` for clone, and (Level 5
+> only) `api.openai.com` / `api.anthropic.com`. Any other host →
+> STOP and ask the user. Full allowlist:
+> `references/network-policy.md`.
+
 This file is the per-skill detail for the **Poker Eval benchmark**. It
 intentionally omits the parts of the generic `/skills/arena.md` that
 do not apply here (claim URL flows, partner invitations, 402 entry

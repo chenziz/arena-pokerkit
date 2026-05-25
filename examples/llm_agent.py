@@ -371,6 +371,21 @@ def _validate_against_allowed(action: dict, table: dict) -> dict:
     return action
 
 
+# Expose a top-level `decide` so the generic agent.py `--agent <module>`
+# loader (which expects `decide(table, deadline_s, research_context)` at
+# module scope) can drive the LLM path without import gymnastics.
+# `llm_decide` remains the canonical implementation and stays callable for
+# anyone who wants to thread custom model/max_tokens through it.
+def decide(table: dict, deadline_s: float = 10.0,
+           research_context: Optional[dict] = None) -> dict:
+    """Module-level decide() shim that forwards to llm_decide() with defaults.
+
+    This lets `./pokerkit run --agent examples/llm_agent.py` work — the
+    loader in agent.py looks up a top-level `decide` symbol."""
+    return llm_decide(table, deadline_s=deadline_s,
+                      research_context=research_context)
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     global _MOCK_LLM
     parser = argparse.ArgumentParser(

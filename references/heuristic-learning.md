@@ -22,7 +22,7 @@ program it. HL itself is **Level 4** in the optimization ladder
 | Role | Where | When called | Cost / hand |
 |---|---|---|---|
 | **L1 default (Levels 1-4)** | `examples/agent.py decide()` | runtime | $0 |
-| **Level 5 runtime-LLM** | `examples/llm_agent.py decide()` | runtime, every action | ~$0.02 |
+| **Level 5 runtime-LLM** | `examples/llm_agent.py decide()` | runtime, every action | paid — varies by model and harness |
 | **HL coder (drives Level 4)** | Your coding agent edits `examples/agent.py` | dev time only | dev-tool cost |
 
 HL is the recommended path. Level 5 is offered as a starter for users
@@ -32,18 +32,30 @@ cost varies by model + harness + token volume.
 ## The HL loop
 
 ```text
-1. STRATEGY     Fill in STRATEGY.md (taste-driven, you write this)
-2. CODE         Coding agent reads STRATEGY.md + decide-function.md,
-                edits examples/agent.py decide() to bake rules
-3. TEST         ./pokerkit test              (20 fixtures, ~50 ms)
+1. STRATEGY     Fill in STRATEGY.md (taste-driven, you write this).
+                STRATEGY.md is the SPEC. The runtime bot never reads it.
+2. CODE         Coding agent reads STRATEGY.md + decide-function.md +
+                failure_report.txt (when looping back) and rewrites
+                examples/agent.py decide() Python to match. decide() is
+                the BUILD ARTIFACT — the only thing the runtime bot sees.
+3. TEST         ./pokerkit test              (20 unit scenarios, ~50 ms)
 4. SELFPLAY     ./pokerkit selfplay --hands 200 --seed 42  (~1 s)
                 → compare bb/100 vs previous run
 5. ARENA        ./pokerkit run --max-hands 50              (~3-5 min)
                 → real bb/100 vs reference panel
 6. ANALYZE      ./pokerkit analyze --out failure_report.txt
                 → which positions/hands lost the most chips?
-7. LOOP         feed failure_report.txt back to coding agent → step 2
+7. LOOP         feed failure_report.txt + STRATEGY.md back to the coding
+                agent → step 2. The agent may also propose STRATEGY.md
+                edits; user approves, then we re-translate.
 ```
+
+**Source vs artifact.** STRATEGY.md is what the *user* edits — a
+human-readable spec. `examples/agent.py decide()` is what the *bot*
+runs — Python the coding agent generated from the spec. There's no
+runtime YAML parser; that would be fragile. The translation happens
+at dev time, every time STRATEGY.md changes or a loop iteration
+completes.
 
 ## Why baked-in code beats runtime LLM
 
@@ -83,7 +95,7 @@ The HL ceiling is around `+5 to +10 bb/100` vs the reference panel —
 strong but not solver-level. To go higher, you need one of:
 
 1. **Level 5 with research context.** Pass GTOWizard / TexasSolver
-   outputs into the LLM at runtime. Costs ~$60/match.
+   outputs into the LLM at runtime. Paid — varies by model and harness.
 2. **Level 6 trained weights.** DeepCFR / NFSP / CFR+ trained on
    labeled spots. Runs at $0/match but takes ~1 week to train + needs
    a GPU. See `docs/strategy.md` "L3 — Trained weights".

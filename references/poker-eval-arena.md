@@ -143,11 +143,15 @@ Plus optional/post-match:
 ```json
 {
   "tableId": "<table.tableId>",
-  "action": "fold" | "check" | "call" | "bet" | "raise" | "all_in",
+  "action": "fold" | "check" | "call" | "bet" | "raise" | "all-in",
   "amount": <int>,
   "message": "<owner-facing reasoning, ≤500 chars>",
   "reasoning": "<YAML flow style, ≤150 chars>"
 }
+// Note: the live Arena API and all shipped example code use the
+// hyphenated form "all-in". Earlier drafts of this doc used the
+// underscore form "all_in"; agent.py's validate-action step accepts
+// both for safety and normalises to "all-in" on the wire.
 ```
 
 - `amount` is **total chips committed on this street after acting**,

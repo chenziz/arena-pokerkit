@@ -30,8 +30,59 @@ import httpx
 DEFAULT_BASE = "https://b-arena.dev.fun/api/arena"
 MOCK_BASE = "http://mock.local/api/arena"  # --dry-run rebinds to this
 CREDS_PATH = Path(".arena-credentials")
+# Holds the previous creds while we attempt re-registration. Restored if
+# re-registration fails so a transient 5xx can't leave the user keyless.
+CREDS_BACKUP_PATH = Path(".arena-credentials.rejected")
 STATE_PATH = Path(".arena-poker-state")
 RETRY_MAX = 3
+
+
+def _move_creds_aside() -> bool:
+    """Rename `.arena-credentials` -> `.arena-credentials.rejected` (replacing
+    any pre-existing backup). Returns True if a file was actually moved.
+
+    Use BEFORE re-registering so a failure can be reversed via
+    `_restore_creds_backup()`. Use `_discard_creds_backup()` once new creds
+    are durably on disk."""
+    if not CREDS_PATH.exists():
+        return False
+    try:
+        # os.replace permits crossing an existing file on the target.
+        os.replace(str(CREDS_PATH), str(CREDS_BACKUP_PATH))
+        return True
+    except OSError as e:
+        print(f"[arena-pokerkit] failed to back up creds aside: {e}",
+              file=sys.stderr)
+        return False
+
+
+def _restore_creds_backup() -> bool:
+    """Move `.arena-credentials.rejected` back to `.arena-credentials` if the
+    primary file is missing. Returns True on restore. No-op if there's no
+    backup or the primary already exists."""
+    if not CREDS_BACKUP_PATH.exists():
+        return False
+    if CREDS_PATH.exists():
+        return False
+    try:
+        os.replace(str(CREDS_BACKUP_PATH), str(CREDS_PATH))
+        print("[arena-pokerkit] restored previous .arena-credentials "
+              "after registration failure", file=sys.stderr)
+        return True
+    except OSError as e:
+        print(f"[arena-pokerkit] failed to restore creds backup: {e}",
+              file=sys.stderr)
+        return False
+
+
+def _discard_creds_backup() -> None:
+    """Best-effort cleanup of the `.rejected` backup once the new creds are
+    durably on disk."""
+    if CREDS_BACKUP_PATH.exists():
+        try:
+            CREDS_BACKUP_PATH.unlink()
+        except OSError:
+            pass
 
 # Required endpoints we expect introspection to expose. If any are missing,
 # the live API has moved and we fail fast rather than 404 mid-hand.
@@ -212,16 +263,15 @@ def load_or_register(client: ArenaClient, handle: str, name: str, quote: str) ->
             creds = {}
         # Refuse mock/dry-run creds for a live run — they'll 401 instantly and
         # cause confusing errors. Auto-clear them and re-register fresh.
+        # Use rename-on-replace (creds -> .rejected) instead of unlink so a
+        # registration failure can still recover the previous state.
         key = creds.get("apiKey") or ""
         agent_id_str = str(creds.get("agentId") or creds.get("id") or "")
         if agent_id_str == "agent_dry" or key.startswith("dry_") or key.startswith("mock_"):
             print(f"[arena-pokerkit] detected stale mock creds (agentId={agent_id_str}); "
-                  "clearing .arena-credentials and re-registering fresh",
+                  "moving .arena-credentials aside and re-registering fresh",
                   file=sys.stderr)
-            try:
-                CREDS_PATH.unlink()
-            except OSError:
-                pass
+            _move_creds_aside()
             creds = {}
             key = None
         if key:
@@ -235,10 +285,7 @@ def load_or_register(client: ArenaClient, handle: str, name: str, quote: str) ->
                     print(f"[arena-pokerkit] cached key rejected ({e.status}); re-registering",
                           file=sys.stderr)
                     client.api_key = None
-                    try:
-                        CREDS_PATH.unlink()
-                    except OSError:
-                        pass
+                    _move_creds_aside()
                 else:
                     raise
     # Handles are globally unique. On a fresh dogfood the default
@@ -248,25 +295,33 @@ def load_or_register(client: ArenaClient, handle: str, name: str, quote: str) ->
     # impossible without masking a real config problem like a bad base URL).
     attempt_handle = handle
     body = None
-    for attempt in range(3):
-        try:
-            body = client.post("/auth/register", {
-                "handle": attempt_handle, "name": name, "quote": quote,
-                "description": "",
-            })
-            break
-        except ArenaError as e:
-            if e.status == 409 and _is_handle_taken(e.body) and attempt < 2:
-                suffix = secrets.token_hex(3)
-                attempt_handle = f"{handle}-{suffix}"
-                print(f"[arena-pokerkit] handle {handle!r} taken; "
-                      f"retrying as {attempt_handle!r}", file=sys.stderr)
-                continue
-            raise
-    if isinstance(body, dict) and "apiKey" in body:
-        client.api_key = body["apiKey"]
-    _atomic_write(CREDS_PATH, json.dumps(body, indent=2))
-    return body if isinstance(body, dict) else {}
+    try:
+        for attempt in range(3):
+            try:
+                body = client.post("/auth/register", {
+                    "handle": attempt_handle, "name": name, "quote": quote,
+                    "description": "",
+                })
+                break
+            except ArenaError as e:
+                if e.status == 409 and _is_handle_taken(e.body) and attempt < 2:
+                    suffix = secrets.token_hex(3)
+                    attempt_handle = f"{handle}-{suffix}"
+                    print(f"[arena-pokerkit] handle {handle!r} taken; "
+                          f"retrying as {attempt_handle!r}", file=sys.stderr)
+                    continue
+                raise
+        if isinstance(body, dict) and "apiKey" in body:
+            client.api_key = body["apiKey"]
+        _atomic_write(CREDS_PATH, json.dumps(body, indent=2))
+        # New creds are durable on disk — drop the previous .rejected backup.
+        _discard_creds_backup()
+        return body if isinstance(body, dict) else {}
+    except Exception:
+        # Registration blew up after we already moved the old creds aside.
+        # Restore them so the caller / next run isn't left credential-less.
+        _restore_creds_backup()
+        raise
 
 
 def _is_handle_taken(body: Any) -> bool:

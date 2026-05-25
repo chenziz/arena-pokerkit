@@ -744,3 +744,60 @@ def test_register_409_gives_up_after_3_attempts():
         f"expected exactly 3 attempts before giving up, "
         f"got {register_route.call_count}"
     )
+
+
+@respx.mock
+def test_register_5xx_restores_previous_creds():
+    """Regression for v0.18.1: if cached creds get rejected by /agent/me and
+    the re-registration attempt then fails (e.g. 502), the previous creds
+    must be restored — the user must never end up keyless because of a
+    transient server blip.
+
+    Setup: a real-looking cached creds file. /agent/me 401s. /auth/register
+    then 502s. Expected: .arena-credentials is restored to its original
+    contents, no .rejected file lingers in primary position."""
+    # Seed cached creds on disk.
+    cached = {
+        "agentId": "agent_real",
+        "apiKey": "arena_sk_real_previous_key_value_for_test_only",
+        "handle": "pokerkit-starter",
+        "name": "PokerKit Starter",
+    }
+    Path(".arena-credentials").write_text(json.dumps(cached, indent=2))
+    original_bytes = Path(".arena-credentials").read_bytes()
+
+    # /agent/me rejects the cached key → triggers re-register path.
+    respx.get(f"{MOCK_BASE}/agent/me").mock(
+        return_value=httpx.Response(401, json={"error": "Unauthorized"})
+    )
+    # /auth/register then fails with a 5xx the registration code doesn't
+    # special-case → should bubble up through load_or_register.
+    register_route = respx.post(f"{MOCK_BASE}/auth/register").mock(
+        return_value=httpx.Response(502, json={"error": "Bad Gateway"})
+    )
+
+    client = arena_client_mod.ArenaClient(MOCK_BASE)
+    try:
+        with pytest.raises(arena_client_mod.ArenaError) as exc:
+            arena_client_mod.load_or_register(
+                client, handle="pokerkit-starter",
+                name="PokerKit Starter", quote="GG",
+            )
+    finally:
+        client.close()
+
+    assert exc.value.status == 502
+    assert register_route.called, "expected /auth/register to be hit"
+
+    creds_path = Path(".arena-credentials")
+    backup_path = Path(".arena-credentials.rejected")
+    assert creds_path.exists(), (
+        "expected .arena-credentials to be restored after registration failure"
+    )
+    assert creds_path.read_bytes() == original_bytes, (
+        "restored creds must match the original byte-for-byte"
+    )
+    assert not backup_path.exists(), (
+        "expected .arena-credentials.rejected to be cleaned up after restore "
+        "(only the primary should remain)"
+    )

@@ -166,6 +166,70 @@ def _demo() -> int:
     return 0
 
 
+def _export_preflop_json(out_path: str = "research/preflop.json") -> str:
+    """Write the static preflop chart to ./research/preflop.json so that
+    decide() / retrieve_solver_context() can load it without re-running the
+    script. Schema: {position: {hand_class: action}}. Atomic write via a
+    sibling `.tmp` file then os.replace, so a crash mid-write can't leave a
+    half-written file.
+
+    Returns the absolute path of the file written."""
+    import json
+    import os
+    from pathlib import Path
+
+    path = Path(out_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    chart: dict[str, dict[str, str]] = {}
+    for pos, rules in _OPEN_CHART.items():
+        per_pos: dict[str, str] = {}
+        for hand in rules.get("raise", set()):
+            per_pos[hand] = "raise"
+        for hand in rules.get("call", set()):
+            # raise wins ties (a hand in both sets favours the more aggressive
+            # action), but in this chart `call` sets are empty so this is a
+            # forward-compatibility no-op.
+            per_pos.setdefault(hand, "call")
+        chart[pos] = per_pos
+
+    payload = {
+        "schema": "preflop-chart-v1",
+        "source": "examples/research_static_chart.py",
+        "note": "6-max NLHE opening chart. {position: {hand_class: action}}. "
+                "Hands not listed default to fold. Postflop is not covered.",
+        "ranges": chart,
+    }
+
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True))
+    os.replace(tmp_path, path)
+    return str(path.resolve())
+
+
+def load_preflop_chart(path: str = "research/preflop.json") -> Optional[dict]:
+    """Load a previously-exported preflop chart from disk. Returns None if
+    the file is missing or unparseable — callers should fall back to the
+    in-memory `_OPEN_CHART` heuristic in that case."""
+    import json
+    from pathlib import Path
+
+    p = Path(path)
+    if not p.exists():
+        return None
+    try:
+        data = json.loads(p.read_text())
+    except Exception:
+        return None
+    ranges = data.get("ranges") if isinstance(data, dict) else None
+    if not isinstance(ranges, dict):
+        return None
+    return ranges
+
+
 if __name__ == "__main__":
     import sys
-    sys.exit(_demo())
+    rc = _demo()
+    out = _export_preflop_json()
+    print(f"\nwrote preflop chart -> {out}")
+    sys.exit(rc)

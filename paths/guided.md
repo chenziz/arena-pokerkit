@@ -331,9 +331,11 @@ Then ASK approval for Stage 2.
 ```
 🤖 Stage 2: Strategy.md
 
-  I'm going to write STRATEGY.md — a real strategy file with ranges,
-  sizing, and adaptation rules. decide() will read it before every
-  action.
+  I'm going to write STRATEGY.md — a real strategy spec with ranges,
+  sizing, and adaptation rules. STRATEGY.md is the SOURCE; I'll
+  translate it into `examples/agent.py decide()` Python. The runtime
+  bot reads only the generated code, not the markdown — but you only
+  edit the markdown, and I'll re-translate whenever you change it.
 
   Before I write it, do you want to:
 
@@ -360,12 +362,15 @@ about any line.
 Loop on `edit` / `explain` until user says `go`.
 
 On `go`:
-1. Patch `examples/agent.py` to read STRATEGY.md before each action.
+1. **Translate STRATEGY.md into `examples/agent.py decide()` Python.**
+   The markdown is the spec; the Python is the build artifact. The
+   runtime bot reads only the generated code. Re-translate whenever
+   the user edits STRATEGY.md or after an HL iteration.
 2. Run local validation — and **surface the results to the user**.
    Both modes, both visible:
 
 ```bash
-./pokerkit test                          # 21 fixed scenario fixtures
+./pokerkit test                          # 20 unit scenarios (21 pytest tests)
 ./pokerkit selfplay --hands 200 --seed 42  # 200-hand match vs simple bot
 ```
 

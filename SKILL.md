@@ -269,7 +269,7 @@ writes**: write to `.pokerkit-milestones.json.tmp` then `os.rename`.
 | Stage | id | Pretty name | Unlocks when |
 |---|---|---|---|
 | Stage 1 | `style_picked` | Style Picked | A style (TAG/LAG/balanced/custom) is selected — guided ASKs, quick auto-defaults — and the style label is saved |
-| Stage 2 | `strategy_written` | Strategy Written | `STRATEGY.md` exists in repo root with real ranges + sizing + adaptation rules; `decide()` reads it before each action |
+| Stage 2 | `strategy_written` | Strategy Written | `STRATEGY.md` exists in repo root as the SPEC (real ranges + sizing + adaptation rules); the agent has translated it into `decide()` Python — the runtime bot reads only the generated code, not the markdown |
 | Stage 3 | `research_wired` | Research Wired | At least one research data source baked in (`research/preflop.json`, board-texture buckets, or `/texas/agent-stats` hook); `decide()` consults it before pure-style decisions |
 | Stage 4 | `curriculum_running` | Curriculum Running | First HL loop iteration completed: `failure_report.txt` generated + at least one `decide()` patch applied + re-run logged in `.arena-poker-state['iterations']` |
 

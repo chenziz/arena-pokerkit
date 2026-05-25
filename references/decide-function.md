@@ -22,11 +22,15 @@ def decide(
 
     Returns:
       {
-        "action": "fold" | "check" | "call" | "bet" | "raise" | "all_in",
-        "amount": <int>,                       # required for bet/raise
+        "action": "fold" | "check" | "call" | "bet" | "raise" | "all-in",
+        "amount": <int>,                       # required for bet/raise/all-in
         "message": "<≤500 chars, human-readable>",
         "reasoning": "<YAML flow style, ≤150 chars>",
       }
+      # Note: the live Arena API and all shipped example code use the
+      # hyphenated form "all-in". The legacy underscore form "all_in"
+      # appeared in earlier drafts of these reference docs — agent.py's
+      # validate-action step normalises both to "all-in" for safety.
     """
 ```
 

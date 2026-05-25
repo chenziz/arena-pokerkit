@@ -18,7 +18,7 @@
 Setup        (Phase 1, silent)        → repo cloned, uv synced, baseline noted
 Stage 1      Style                    → style label saved, decide() reads it
              → Arena (500-hand quick test) → score with 4-stage anchor → ASK
-Stage 2      Strategy.md              → STRATEGY.md written, decide() reads it
+Stage 2      Strategy.md              → STRATEGY.md (spec) used to write decide() Python
              → Arena → score → ASK
 Stage 3      Auto Research            → research/*.json pulled, decide() consults
              → Arena → score → ASK
@@ -132,8 +132,12 @@ On `go`:
 2. Fill it in based on the Stage 1 style (tight-aggressive by
    default). Real ranges per position, real sizing tables, real
    adaptation rules.
-3. Patch `examples/agent.py` to read STRATEGY.md before each action
-   (use `assets/decide_ranged.py` as the implementation reference).
+3. **Translate STRATEGY.md into `examples/agent.py decide()` Python** —
+   the markdown is the SPEC, the Python is the BUILD ARTIFACT. Use
+   `assets/decide_ranged.py` as the implementation reference. The
+   runtime bot reads only the generated Python; the agent re-runs this
+   translation whenever STRATEGY.md changes or a Heuristic Learning
+   iteration completes.
 
 Then show the user a snippet of the actual file:
 
@@ -141,7 +145,9 @@ Then show the user a snippet of the actual file:
 🤖 Stage 2: Strategy.md
 
   📄 STRATEGY.md written to repo root. This file is YOURS — read it,
-  edit it, ask me about any line.
+  edit it, ask me about any line. The bot itself reads only the
+  generated `examples/agent.py decide()` code — but you only ever
+  edit the markdown, and I'll re-translate when you do.
 
   Snippet:
 
@@ -151,14 +157,16 @@ Then show the user a snippet of the actual file:
     Adapt:      vs >40% VPIP villain, widen value range one tier
     ...
 
-  decide() now reads STRATEGY.md before every action.
+  STRATEGY.md is the spec. I translated it into decide() Python — the
+  runtime bot reads the code, not the markdown. Edit STRATEGY.md and
+  ask me to re-translate any time.
 ```
 
 Run local validation — and **surface the results to the user**.
 Both modes, both visible:
 
 ```bash
-./pokerkit test                          # 21 fixed scenario fixtures
+./pokerkit test                          # 20 unit scenarios (21 pytest tests)
 ./pokerkit selfplay --hands 200 --seed 42  # 200-hand match vs simple bot
 ```
 

@@ -418,17 +418,47 @@ def _compute_eta(start_time: float, hands_done: Any, target: Any) -> str:
     return f" | ETA {eta_s // 60}m{eta_s % 60:02d}s"
 
 
+# Earlier drafts of references/decide-function.md + poker-eval-arena.md
+# documented the all-in action as `"all_in"` (underscore). The live Arena
+# API and all shipped example code use the hyphenated form `"all-in"`.
+# Accept both from user-written decide() implementations and normalise to
+# the canonical hyphen form before submission so a "_" doesn't 400 the
+# server. Cheap and defensive — nothing more.
+_ACTION_ALIASES = {"all_in": "all-in", "allin": "all-in"}
+
+
+def _normalize_action_name(action: dict) -> dict:
+    """Return a copy of `action` with `action.action` canonicalised to the
+    hyphenated wire form. No-op if the action dict is missing or malformed."""
+    if not isinstance(action, dict):
+        return action
+    name = action.get("action")
+    if isinstance(name, str) and name in _ACTION_ALIASES:
+        out = dict(action)
+        out["action"] = _ACTION_ALIASES[name]
+        return out
+    return action
+
+
 def _attempt_credential_repair(client: ArenaClient, args: argparse.Namespace) -> bool:
-    """Mid-match 401/403 repair: nuke cached creds and re-register once.
-    Returns True if the new credentials work, False otherwise. Never loops."""
+    """Mid-match 401/403 repair: move cached creds aside and re-register once.
+    Returns True if the new credentials work, False otherwise. Never loops.
+
+    Uses the same rename-on-replace pattern as load_or_register(): the old
+    creds are renamed to `.arena-credentials.rejected` BEFORE the new
+    register attempt. If registration fails, the backup is restored — the
+    user never ends up keyless because of a transient 5xx."""
     try:
-        from arena_client import CREDS_PATH  # local import to avoid stale ref
-        try:
-            CREDS_PATH.unlink()
-        except OSError:
-            pass
+        # Local import to avoid stale module references in long-running
+        # processes (and to keep test monkeypatching seams sharp).
+        from arena_client import _move_creds_aside, _restore_creds_backup  # noqa: F401
+        _move_creds_aside()
         client.api_key = None
-        creds = load_or_register(client, args.handle, args.name, args.quote)
+        try:
+            creds = load_or_register(client, args.handle, args.name, args.quote)
+        except Exception:
+            _restore_creds_backup()
+            raise
         return bool(creds.get("apiKey") or client.api_key)
     except Exception as e:
         print(f"[arena-pokerkit] credential repair failed: {e}", file=sys.stderr)
@@ -502,6 +532,7 @@ def _run_benchmark_loop(
                                    research_context=research_context)
             except TypeError:
                 action = decide_fn(table, deadline_s=deadline_s)
+            action = _normalize_action_name(action)
             payload = {"tableId": table["tableId"], **action}
             try:
                 client.post("/texas/action", payload)

@@ -2,6 +2,61 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.18.1] — 2026-05-25 — "Codex cleanup"
+
+Final fix-up pass before colleague handoff. All issues caught by a Codex
+review; each one is a real (if mostly latent) bug.
+
+### Fixed
+
+- **`examples/research_static_chart.py` now actually writes
+  `research/preflop.json` when run as a script.** The Auto Research
+  promise in `paths/*.md` was a half-truth — the script only printed
+  demo lookups before. New `_export_preflop_json()` writes the chart
+  atomically (`{position: {hand_class: action}}` schema, fold default)
+  and ships a `load_preflop_chart()` helper for `decide()` /
+  `retrieve_solver_context()` to optionally consume.
+- **`examples/llm_agent.py` now exposes a top-level `decide(table,
+  deadline_s, research_context)`** so the generic `agent.py --agent`
+  loader can drive the LLM path. Previously only `llm_decide` was
+  module-scope, and `./pokerkit run --agent examples/llm_agent.py`
+  errored out on the symbol lookup.
+- **Credential auto-repair is no longer destructive.** Both
+  `arena_client.load_or_register()` and `agent._attempt_credential_repair()`
+  now use a rename-on-replace pattern: `.arena-credentials` is moved
+  aside to `.arena-credentials.rejected` BEFORE re-registering, and
+  restored if the new register call fails. A transient 5xx during
+  re-registration no longer leaves the user keyless. New test in
+  `tests/test_smoke.py` covers the 502 restore path.
+- **Action enum consistency.** `references/decide-function.md` +
+  `references/poker-eval-arena.md` previously documented `"all_in"`
+  (underscore) while all shipped code used `"all-in"` (hyphen). Docs
+  now match code (canonical = hyphen). `agent.py` ships a defensive
+  `_normalize_action_name()` that accepts both forms and rewrites to
+  the canonical hyphenated form before submission so a `"_"` from a
+  user-written decide() doesn't 400 the server.
+- **`STRATEGY.md` is the SPEC, `decide()` is the BUILD ARTIFACT.** Path
+  docs that claimed "decide() reads STRATEGY.md before every action"
+  were misleading — shipped `assets/decide_*.py` all hardcode ranges,
+  and the MD is never opened at runtime. Reworded `paths/quick.md`,
+  `paths/guided.md`, `SKILL.md`, and `references/heuristic-learning.md`
+  to be honest about the source-vs-artifact split: the user edits
+  markdown, the coding agent translates that into Python whenever
+  STRATEGY.md changes or an HL iteration completes, and the runtime
+  bot reads only the generated Python.
+- **Scenario count.** `paths/quick.md` and `paths/guided.md` said
+  "21 fixed scenario fixtures"; `examples/testing.py` actually yields
+  20 unit scenarios (and there are 21 pytest tests total). Updated to
+  "20 unit scenarios (21 pytest tests)".
+- **`references/heuristic-learning.md` Level 5 cost.** Replaced the
+  fixed `$0.02/decision` and `$60/match` numbers (deprecated since
+  v0.13.0) with "paid — varies by model and harness".
+- **README version badge.** Bumped from `0.18.0` to `0.18.1`.
+
+### Internal
+
+- `pyproject.toml` + `examples/cli.py VERSION` bumped to `0.18.1`.
+
 ## [0.18.0] — 2026-05-25 — "Final consolidation — WHY framing, final-tier ladder, 500/5000-hand labels, no S5/S6 jargon"
 
 Final consolidation pass before handoff for GitHub upload + internal

@@ -344,12 +344,95 @@ Loop on `edit` / `explain` until user says `go`.
 
 On `go`:
 1. Patch `examples/agent.py` to read STRATEGY.md before each action.
-2. Run local validation.
-3. Run `./pokerkit run`.
-4. Unlock stage milestone `strategy_written` and pop.
-5. Surface score with 4-stage anchor table (Stage 2 row marked).
-6. If `beat_baseline` triggers, pop that marker.
-7. ASK approval for Stage 3.
+2. Run local validation — and **surface the results to the user**.
+   Both modes, both visible:
+
+```bash
+./pokerkit test                          # 21 fixed scenario fixtures
+./pokerkit selfplay --hands 200 --seed 42  # 200-hand match vs simple bot
+```
+
+Capture the actual output from each command. Then print a unified
+results block (use real numbers from the run; examples illustrative):
+
+```
+🧪 Local test — fixed scenarios:
+   PASS  AKs UTG → bot raises ✓
+   PASS  72o BB vs MP open → bot folds ✓
+   PASS  AA on dry flop → bot bets ✓
+   ...
+   21 / 21 passed (your bot makes the "obvious right play" in all
+   canonical spots)
+
+🎯 Local self-play — 200 hands vs tight-passive bot:
+   Win rate:  68% (137 / 200 hands won net)
+   bb/100:    +14.8 bb/100  ← positive locally
+   speed:     0.6 sec total
+```
+
+If `pokerkit test` exits non-zero or any scenario fails, surface the
+failures and stop the flow — do not offer Stage 3 until tests pass.
+
+### Honest reflection — local ≠ Arena
+
+Immediately after the results block, print this reflection. It is
+**mandatory** — do not skip to Stage 3 (or Arena) without showing it:
+
+```
+✓ Your bot plays the strategy you wrote and edited. Local results are
+  positive — but the local opponent is a simple tight-passive bot.
+
+  Arena's reference panel is much stronger (DeepCFR-style trained
+  agents). The same Strategy MD against the panel would likely score
+  around -25 to -15 bb/100 — that's the typical Stage 2 anchor.
+
+  Before going to Arena, let's give your bot more knowledge — that's
+  what Stage 3 (Auto Research) and Stage 4 (Curriculum) add.
+```
+
+3. Unlock stage milestone `strategy_written` and pop.
+   (Stage 2's milestone fires on the local validation passing, not on
+   an Arena run — Arena is now gated behind Stage 3.)
+
+### Anticipation tease — Stage 3, NOT Arena
+
+Then ASK (note: **no Arena option here as default**):
+
+```
+🔓 Stage 3 — Auto Research unlocked.
+
+   Your STRATEGY.md is "opinions on paper". Stage 3 adds DATA:
+     • Preflop GTO ranges (e.g. Upswing 6-max chart)
+     • Board texture buckets (dry/wet/paired sizing tables)
+     • Opponent HUD (their VPIP / aggression — pulled live)
+
+   I bake these into decide() so your bot looks up data before
+   making decisions, not just relies on your strategy preamble.
+   Expected lift: +12 to +20 bb/100 over current. Should bring Arena
+   score to -10 to -3.
+
+  • `go`           — start Stage 3 (Auto Research)
+  • `show me`      — open STRATEGY.md and walk through it again first
+  • `edit more`    — tweak STRATEGY.md again before Stage 3
+  • `arena anyway` — measure Stage 2 on Arena now (will likely score
+                     -25 to -15 bb/100; Stage 3 + 4 are where the climb is)
+```
+
+If the user picks `arena anyway`, warn once more before running:
+
+```
+You can run Arena now, but Stage 2 bots typically score -25 to -15
+bb/100 against the reference panel. Stage 3 + Stage 4 are where the
+real climb happens. Sure you want to spend ~15 min on a Stage 2
+measurement?
+
+  • `yes`     — run Arena anyway
+  • `no`      — proceed to Stage 3 instead
+```
+
+Only on explicit `yes` do you run `./pokerkit run` from Stage 2. On
+terminal state, surface score with 4-stage anchor table (Stage 2 row
+marked) and re-offer Stage 3.
 
 ---
 

@@ -42,5 +42,11 @@ htmlcov/
 
 # Claude / OMC session artifacts
 .omc/
-.claude/
 .aider*
+
+# Claude Code per-user settings — keep .claude/settings.json.example
+# committed (it's the pre-grant template) but ignore the user's live
+# settings.json and any local overrides.
+.claude/*
+!.claude/settings.json.example
+!.claude/settings.json.example.README

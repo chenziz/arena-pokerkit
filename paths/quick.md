@@ -1,5 +1,13 @@
 # Path: quick — "I drive all 4 stages, you approve at boundaries"
 
+> 💡 First time? Your agent's sandbox may ask permission for shell
+> commands in this repo — say yes (it's local-only Python; the only
+> network call is Arena evaluation, which you approve before it
+> happens). Once is enough. See SKILL.md "Permission heads-up" or
+> README.md "First-run permissions" for details. Both `./pokerkit
+> <verb>` and `uv run python examples/<script>.py` work — pick
+> whichever your sandbox prefers.
+
 > Loaded when the user replies `quick` to the SKILL.md first-contact
 > greeting. The goal: walk the user through the **4-stage progression**
 > (Style → Strategy.md → Auto Research → Curriculum) without asking
@@ -42,6 +50,8 @@ cd arena-pokerkit
 uv sync
 cp .env.example .env
 ./pokerkit selfplay --hands 200 --seed 42   # local baseline number
+# OR equivalent (sandbox-friendly):
+# uv run python examples/selfplay.py --hands 200 --seed 42
 ```
 
 When complete, print one line:

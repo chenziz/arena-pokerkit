@@ -1,5 +1,13 @@
 # Path: guided — "Walk me through it, I want to participate"
 
+> 💡 First time? Your agent's sandbox may ask permission for shell
+> commands in this repo — say yes (it's local-only Python; the only
+> network call is Arena evaluation, which you approve before it
+> happens). Once is enough. See SKILL.md "Permission heads-up" or
+> README.md "First-run permissions" for details. Both `./pokerkit
+> <verb>` and `uv run python examples/<script>.py` work — pick
+> whichever your sandbox prefers.
+
 > Loaded when the user replies `guided` to the SKILL.md first-contact
 > greeting. Same 4-stage progression as `quick.md`, but **the user
 > participates actively at each stage**:

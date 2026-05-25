@@ -2,6 +2,79 @@
 
 All notable changes to this project follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.18.3] — 2026-05-25 — "First-Run Permission Heads-up — friction fix from real user testing"
+
+A real user (fresh Claude Code agent on a brand-new clone) hit sandbox
+friction on their very first command — the launcher `./pokerkit`
+triggered a Bash permission prompt that gave them three options
+including "hand off to the user", which defeats the whole agent-driven
+loop the kit is built around. Danny's feedback: "looks like there's a
+bit of friction on my side."
+
+**Root cause.** Fresh agents (Claude Code, Codex CLI, Cursor) sandbox
+unfamiliar repo paths by default. The `./pokerkit` shell wrapper
+triggers extra suspicion compared to direct `uv run python ...`
+invocations. v0.18 and earlier assumed agents would run commands
+transparently — they don't on the first command in a new repo.
+
+**Fix** — pre-warn the user BEFORE the friction happens, ship a
+pre-grant template, document the wrapper-less alternative everywhere
+the wrapper appears.
+
+### Added
+
+- **`.claude/settings.json.example`** at repo root — Claude Code
+  pre-grant template. Copy to `.claude/settings.json` to allowlist the
+  exact commands the kit needs (`./pokerkit:*`, `uv run:*`, `uv sync:*`,
+  `python -m pytest:*`, basic `git` introspection, `cat
+  .arena-credentials:*`, `Read(./*)`). Sibling
+  `.claude/settings.json.example.README` explains the file (JSON has no
+  comments so the note can't live inline). `.gitignore` updated so the
+  `.example` is committed but the user's live `.claude/settings.json`
+  isn't.
+- **SKILL.md "Permission heads-up" section** before Step 0 first
+  command — agent surfaces the sandbox-prompt context to the user
+  BEFORE running anything, so the user knows what's about to happen
+  and which option to pick. Includes the verbatim user-facing block
+  and translation guidance for non-English sessions.
+- **Wrapper-less command form** documented next to the wrapper form in
+  SKILL.md, README.md, AGENTS.md, paths/quick.md, paths/guided.md. The
+  `uv run python examples/<script>.py` form is sometimes auto-allowed
+  by sandboxes that block arbitrary `./` invocations. Both forms
+  produce identical output.
+- **README.md "First-run permissions" section** after the quick-start
+  URL block — explains the prompt is normal, points at the pre-grant
+  template, names Codex CLI / Cursor / etc. as having their own trust
+  mechanisms.
+- **AGENTS.md "First-run permissions (per-agent notes)" section** —
+  one-paragraph pointer for Claude Code, Codex CLI, Cursor, Aider /
+  Continue / Windsurf. Universal answer: approve once on first run,
+  done; never pick "hand off".
+- **paths/quick.md + paths/guided.md heads-up** at the very top, right
+  after the "Loaded when" frontmatter — one-line warning so the user
+  has context the moment they enter a path.
+
+### Changed
+
+- `pyproject.toml` 0.18.2 → 0.18.3
+- `examples/cli.py` VERSION 0.18.2 → 0.18.3
+- `SKILL.md` frontmatter version 0.18.2 → 0.18.3
+- `README.md` version badge 0.18.2 → 0.18.3
+- `.gitignore` Claude Code section — split into "session artifacts"
+  (ignore `.omc/`, `.aider*`) and "per-user settings" (ignore
+  `.claude/*` but explicitly NOT `.claude/settings.json.example` or
+  `.claude/settings.json.example.README`).
+
+### Why this matters
+
+The kit's value proposition is "agent-driven, mostly autonomous".
+Sandbox friction on the very first command flips that into "user has
+to debug their permission system before they can even start". v0.18.3
+moves the friction from "user discovers it the hard way mid-flow" to
+"agent surfaces it before the first command runs, with a one-click
+pre-grant available". Same total work, dramatically better first-run
+experience.
+
 ## [0.18.2] — 2026-05-25 — "Final review patch"
 
 Last patch before GitHub upload — addresses the final round of Claude

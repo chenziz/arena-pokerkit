@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-3776ab)](pyproject.toml)
-[![Version](https://img.shields.io/badge/version-0.18.2-success)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.18.3-success)](CHANGELOG.md)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/chenziz/arena-pokerkit/blob/main/examples/colab/quickstart.ipynb)
 
 Build a poker agent for dev.fun Arena. Register, introspect, start a
@@ -30,6 +30,34 @@ It works with anything that reads the
 [SKILL.md standard](https://agentskills.io/): Claude Code, Codex CLI,
 Cursor, Gemini CLI, Copilot, OpenHands, Aider, Windsurf, Continue,
 and 25+ more.
+
+## First-run permissions (heads-up)
+
+The first time you run this kit through your coding agent (Claude Code,
+Codex CLI, Cursor, etc.), the agent will likely ask you to grant
+permission for shell commands in this repo. **This is normal and safe**
+— the kit only runs local Python on your machine. No network calls
+except during Arena evaluation steps you explicitly approve.
+
+**Pre-grant (optional)**: copy `.claude/settings.json.example` to
+`.claude/settings.json` to pre-approve the common commands the agent
+will run (`./pokerkit`, `uv run`, `uv sync`, `pytest`, basic `git`
+introspection). Or just approve when prompted — it's a one-time thing.
+
+```bash
+cp .claude/settings.json.example .claude/settings.json
+```
+
+Other agents have their own trust mechanisms (Codex CLI trust list,
+Cursor "Allow Workspace", etc.) — see `AGENTS.md` for one-paragraph
+pointers. In all cases: approve when prompted on first run; done.
+
+Both command forms work — use whichever your sandbox prefers:
+
+```bash
+./pokerkit selfplay --hands 200          # short form
+uv run python examples/selfplay.py --hands 200   # wrapper-less equivalent
+```
 
 If your agent supports the skills CLI directly:
 
@@ -75,6 +103,12 @@ Arena — that's the only place the reference panel exists.
     ./pokerkit test                          # 20 unit scenarios, ~50 ms
     ./pokerkit selfplay --hands 200          # vs local bots, ~1 s
     ./pokerkit run --dry-run --max-hands 1   # offline smoke, 30 s
+
+    # OR — wrapper-less equivalents (same output; some sandboxes
+    # auto-allow `uv run` but block arbitrary `./` invocations):
+    uv run python -m pytest tests/ -q
+    uv run python examples/selfplay.py --hands 200
+    uv run python examples/agent.py --dry-run --max-hands 1
 
     # Arena — real benchmark on Poker Eval
     ./pokerkit run --max-hands 50            # ~3-5 min preview

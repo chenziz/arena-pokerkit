@@ -115,6 +115,41 @@ uv run pytest tests/ -q                    # run before commit
 python -m py_compile examples/agent.py     # quick syntax check
 ```
 
+Wrapper-less equivalents (use these if your sandbox blocks `./`
+invocations but allows `uv run`):
+
+```bash
+uv run python -m pytest tests/ -q
+uv run python examples/selfplay.py --hands 200 --seed 42
+uv run python examples/agent.py --dry-run --max-hands 1
+uv run python examples/agent.py --max-hands 50
+uv run python examples/analyze.py --out failure_report.txt
+uv run python examples/replay.py --latest
+```
+
+## First-run permissions (per-agent notes)
+
+Fresh agents sandbox unfamiliar repo paths by default. The first
+command in this repo will likely trigger a one-time permission prompt.
+**It's normal and safe** — the kit only runs local Python; the only
+network call is during Arena evaluation, which the user explicitly
+approves.
+
+- **Claude Code**: copy `.claude/settings.json.example` to
+  `.claude/settings.json` to pre-approve `./pokerkit`, `uv run`,
+  `pytest`, and basic `git` introspection. Or approve when prompted —
+  one-time grant is enough.
+- **Codex CLI**: uses its own trust mechanism (typically
+  `~/.codex/trust-list` or per-workspace allowlist). Approve the
+  workspace on first run.
+- **Cursor**: Settings → "Allow Workspace" for this repo.
+- **Aider / Continue / Windsurf / others**: each has its own prompt;
+  approve on first run.
+
+In all cases the answer is the same: approve once, done. If a prompt
+gives a "hand off to the user" option, **don't** pick it — that
+defeats the agent-driven loop the kit is built around.
+
 ## Coding style
 
 - Python 3.11+, type hints encouraged but not required.
